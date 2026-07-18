@@ -86,6 +86,13 @@ def test_euclidean_hit_count():
     assert len(pat.steps) == 5
 
 
+def test_euclidean_lands_on_the_downbeat():
+    # Standard Euclidean rhythms place the first pulse on step 0.
+    pat = Pattern(name="p", dsl="perc e(4,16)")
+    pat.parse_dsl()
+    assert min(s.beat for s in pat.steps) == 0.0
+
+
 def test_euclidean_rotation_changes_first_hit():
     a = Pattern(name="a", dsl="perc e(5,16,0)")
     a.parse_dsl()

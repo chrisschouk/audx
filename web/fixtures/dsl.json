@@ -389,7 +389,64 @@
     "steps": [
       {
         "sample": "percussion",
-        "beat": 0.75,
+        "beat": 0.0,
+        "velocity": 0.8,
+        "channel": 0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "tune_semitones": 0.0
+      },
+      {
+        "sample": "percussion",
+        "beat": 1.0,
+        "velocity": 0.8,
+        "channel": 0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "tune_semitones": 0.0
+      },
+      {
+        "sample": "percussion",
+        "beat": 1.75,
+        "velocity": 0.8,
+        "channel": 0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "tune_semitones": 0.0
+      },
+      {
+        "sample": "percussion",
+        "beat": 2.5,
+        "velocity": 0.8,
+        "channel": 0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "tune_semitones": 0.0
+      },
+      {
+        "sample": "percussion",
+        "beat": 3.25,
+        "velocity": 0.8,
+        "channel": 0,
+        "gain_db": 0.0,
+        "pan": 0.0,
+        "tune_semitones": 0.0
+      }
+    ]
+  },
+  {
+    "dsl": "perc e(5,16,2)",
+    "length_beats": 4.0,
+    "swing": 0.0,
+    "humanize": 0.0,
+    "chance": 1.0,
+    "gain_db": 0.0,
+    "pan": 0.0,
+    "tune_semitones": 0.0,
+    "steps": [
+      {
+        "sample": "percussion",
+        "beat": 0.5,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -435,63 +492,6 @@
     ]
   },
   {
-    "dsl": "perc e(5,16,2)",
-    "length_beats": 4.0,
-    "swing": 0.0,
-    "humanize": 0.0,
-    "chance": 1.0,
-    "gain_db": 0.0,
-    "pan": 0.0,
-    "tune_semitones": 0.0,
-    "steps": [
-      {
-        "sample": "percussion",
-        "beat": 0.25,
-        "velocity": 0.8,
-        "channel": 0,
-        "gain_db": 0.0,
-        "pan": 0.0,
-        "tune_semitones": 0.0
-      },
-      {
-        "sample": "percussion",
-        "beat": 1.25,
-        "velocity": 0.8,
-        "channel": 0,
-        "gain_db": 0.0,
-        "pan": 0.0,
-        "tune_semitones": 0.0
-      },
-      {
-        "sample": "percussion",
-        "beat": 2.0,
-        "velocity": 0.8,
-        "channel": 0,
-        "gain_db": 0.0,
-        "pan": 0.0,
-        "tune_semitones": 0.0
-      },
-      {
-        "sample": "percussion",
-        "beat": 2.75,
-        "velocity": 0.8,
-        "channel": 0,
-        "gain_db": 0.0,
-        "pan": 0.0,
-        "tune_semitones": 0.0
-      },
-      {
-        "sample": "percussion",
-        "beat": 3.5,
-        "velocity": 0.8,
-        "channel": 0,
-        "gain_db": 0.0,
-        "pan": 0.0,
-        "tune_semitones": 0.0
-      }
-    ]
-  },
-  {
     "dsl": "bass e(7,16)",
     "length_beats": 4.0,
     "swing": 0.0,
@@ -503,7 +503,7 @@
     "steps": [
       {
         "sample": "bass",
-        "beat": 0.5,
+        "beat": 0.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -512,7 +512,7 @@
       },
       {
         "sample": "bass",
-        "beat": 1.0,
+        "beat": 0.75,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -521,7 +521,7 @@
       },
       {
         "sample": "bass",
-        "beat": 1.5,
+        "beat": 1.25,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -530,7 +530,7 @@
       },
       {
         "sample": "bass",
-        "beat": 2.25,
+        "beat": 1.75,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -539,7 +539,7 @@
       },
       {
         "sample": "bass",
-        "beat": 2.75,
+        "beat": 2.5,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -548,7 +548,7 @@
       },
       {
         "sample": "bass",
-        "beat": 3.25,
+        "beat": 3.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -557,7 +557,7 @@
       },
       {
         "sample": "bass",
-        "beat": 3.75,
+        "beat": 3.5,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -1022,7 +1022,7 @@
     "steps": [
       {
         "sample": "bass",
-        "beat": 0.75,
+        "beat": 0.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -1031,7 +1031,7 @@
       },
       {
         "sample": "bass",
-        "beat": 1.5,
+        "beat": 1.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -1040,7 +1040,7 @@
       },
       {
         "sample": "bass",
-        "beat": 2.25,
+        "beat": 1.75,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -1049,7 +1049,7 @@
       },
       {
         "sample": "bass",
-        "beat": 3.0,
+        "beat": 2.5,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -1058,7 +1058,7 @@
       },
       {
         "sample": "bass",
-        "beat": 3.75,
+        "beat": 3.25,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,

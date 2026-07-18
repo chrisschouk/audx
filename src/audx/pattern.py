@@ -410,12 +410,17 @@ def _euclidean_grid(pulses: int, steps: int, rotation: int = 0) -> list[int]:
         return [0] * max(steps, 0)
     pulses = min(pulses, steps)
     grid = [0] * steps
-    bucket = 0
+    if pulses == 0:
+        return grid
+    # Bresenham line: a pulse marks each change of ``(i * pulses) // steps``.
+    # This distributes the pulses as evenly as possible AND always lands one on
+    # step 0 (the downbeat), matching the standard Euclidean-rhythm convention.
+    prev = -1
     for i in range(steps):
-        bucket += pulses
-        if bucket >= steps:
-            bucket -= steps
+        cur = (i * pulses) // steps
+        if cur != prev:
             grid[i] = 1
+            prev = cur
     if rotation:
         rotation = rotation % steps
         grid = grid[-rotation:] + grid[:-rotation]
