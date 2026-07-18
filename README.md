@@ -203,7 +203,7 @@ mastering pass.
 
 ```bash
 uv sync
-uv run pytest -q                 # 120+ tests
+uv run pytest -q                 # 220+ tests
 uv run ruff check src tests
 uv run mypy src/audx             # clean across the whole package
 ```
