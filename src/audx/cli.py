@@ -61,6 +61,20 @@ app.add_typer(song_app, name="song")
 pattern_app.add_typer(slot_app, name="slot")  # `audx pattern slot ...`
 
 
+def _check_channel(channel: int, channels: int) -> None:
+    """Reject out-of-range mixer channels with a friendly error.
+
+    Guards direct numpy indexing on the engine's channel arrays: a too-large
+    index would raise a raw ``IndexError`` traceback, and a negative index would
+    silently wrap and mutate the wrong channel.
+    """
+    if not 0 <= channel < channels:
+        typer.echo(
+            f"Channel {channel} out of range (valid: 0-{channels - 1}).", err=True
+        )
+        raise typer.Exit(1)
+
+
 def _pattern_payload() -> list[dict]:
     return [
         {
@@ -520,10 +534,18 @@ def render_pattern(
             typer.echo(f"  ✓ {target}")
         return
 
+    def _parse(dsl_text: str) -> Pattern:
+        pat = Pattern(name=name, dsl=dsl_text)
+        try:
+            pat.parse_dsl()
+        except ValueError as exc:
+            typer.echo(f"Pattern error: {exc}", err=True)
+            raise typer.Exit(1) from exc
+        return pat
+
     if variations and variations > 0:
         for i in range(1, variations + 1):
-            pat = Pattern(name=name, dsl=dsl)
-            pat.parse_dsl()
+            pat = _parse(dsl)
             arrangement = Arrangement(bpm=bpm)
             arrangement.add(pat, start_bar=0, bars=bars)
             target = output.with_name(f"{output.stem}_v{i:02d}{output.suffix}")
@@ -531,8 +553,7 @@ def render_pattern(
             typer.echo(f"  ✓ {target}")
         return
 
-    pattern = Pattern(name=name, dsl=dsl)
-    pattern.parse_dsl()
+    pattern = _parse(dsl)
     arrangement = Arrangement(bpm=bpm)
     arrangement.add(pattern, start_bar=0, bars=bars)
     path = render_arrangement(arrangement, library, output)
@@ -732,6 +753,7 @@ def mix_set(
 ) -> None:
     """Set a mixer parameter (spec §06)."""
     engine = get_engine() or init_engine()
+    _check_channel(channel, engine.channels)
     if param == "gain":
         try:
             db = float(value)
@@ -752,6 +774,7 @@ def mix_set(
 def mute_channel(channel: int = typer.Argument(..., help="Channel index (0-based)")) -> None:
     """Toggle mute on a channel."""
     engine = get_engine() or init_engine()
+    _check_channel(channel, engine.channels)
     engine.channel_mute[channel] = not bool(engine.channel_mute[channel])
     typer.echo(f"  ✓ ch {channel} mute {bool(engine.channel_mute[channel])}")
 

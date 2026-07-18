@@ -128,3 +128,25 @@ def test_render_with_real_sample(tmp_path: Path):
     )
     assert result.exit_code == 0, result.stdout
     assert out.exists()
+
+
+def test_render_bad_spec_reports_friendly_error(tmp_path: Path):
+    out = tmp_path / "bad.wav"
+    result = runner.invoke(app, ["render", "hh ax8", "-o", str(out), "--bars", "1"])
+    assert result.exit_code == 1
+    assert "Pattern error" in result.output
+    # a friendly message, not a raw traceback
+    assert "Traceback" not in result.output
+    assert not out.exists()
+
+
+def test_mix_set_rejects_out_of_range_channel():
+    result = runner.invoke(app, ["mix", "set", "99", "gain", "-3"])
+    assert result.exit_code == 1
+    assert "out of range" in result.output
+
+
+def test_mute_rejects_out_of_range_channel():
+    result = runner.invoke(app, ["mute", "42"])
+    assert result.exit_code == 1
+    assert "out of range" in result.output

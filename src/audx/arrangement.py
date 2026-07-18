@@ -15,6 +15,8 @@ from audx.pattern import Pattern
 from audx.sampler import SampleLibrary
 from audx.synth import is_synth_voice, synth_voice
 
+_SQRT2 = math.sqrt(2.0)
+
 
 @dataclass
 class Clip:
@@ -244,7 +246,20 @@ def _mix_clips(
                 if start >= total_frames or end <= start:
                     continue
                 gain = step.velocity * 0.7
-                mix[start:end] += data[: end - start] * gain
+                gain_db = getattr(step, "gain_db", 0.0)
+                if gain_db:
+                    gain *= 10.0 ** (gain_db / 20.0)
+                seg = data[: end - start] * gain
+                pan = getattr(step, "pan", 0.0)  # -1 = L, 0 = centre, +1 = R
+                if pan:
+                    # Constant-power pan, √2-normalised so pan=0 leaves both
+                    # channels at unity (identical to the un-panned path).
+                    angle = (pan + 1.0) * (math.pi / 4.0)
+                    seg = seg * np.array(
+                        [math.cos(angle) * _SQRT2, math.sin(angle) * _SQRT2],
+                        dtype=np.float32,
+                    )
+                mix[start:end] += seg
 
     return mix
 

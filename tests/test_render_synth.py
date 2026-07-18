@@ -66,3 +66,26 @@ def test_synth_cache_reused(tmp_path: Path):
     # same cached object reused for the same voice/tune
     assert first is second
     assert len(cache) == 1
+
+
+def test_gain_db_modifier_attenuates_output(tmp_path: Path):
+    plain = _render("kick 4/4", tmp_path, name="plain")
+    quiet = _render("kick 4/4 | gain -6db", tmp_path, name="quiet")
+    plain_peak = float(np.max(np.abs(plain)))
+    quiet_peak = float(np.max(np.abs(quiet)))
+    # -6 dB is about 0.501x amplitude; must be clearly quieter, not identical.
+    assert quiet_peak == 0.0 or plain_peak > 0.0
+    assert quiet_peak < plain_peak * 0.6
+
+
+def test_pan_hard_left_silences_right_channel(tmp_path: Path):
+    data = _render("kick 4/4 | pan L100", tmp_path, name="left")
+    left_peak = float(np.max(np.abs(data[:, 0])))
+    right_peak = float(np.max(np.abs(data[:, 1])))
+    assert left_peak > 0.1
+    assert right_peak < 1e-4
+
+
+def test_pan_centre_leaves_channels_equal(tmp_path: Path):
+    data = _render("kick 4/4 | pan 0", tmp_path, name="centre")
+    assert np.allclose(data[:, 0], data[:, 1])
