@@ -97,7 +97,9 @@ def launch(
     play here shows up live at ``http://<this-machine>:<port>/`` on any device.
     """
     if samples:
-        os.environ["AUDX_SAMPLES_DIR"] = str(samples)
+        from audx.sampler import set_sample_library_root
+
+        set_sample_library_root(samples)
     if project is not None:
         loaded = _load_project(project)
         typer.echo(f"Loaded project: {loaded.name}")
