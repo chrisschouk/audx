@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Cross-platform config paths**: audx no longer hardcodes macOS locations. The
+  config directory now follows each platform's convention — XDG
+  (`~/.config/audx`) on Linux, `~/Library/Application Support/audx` on macOS, and
+  `%APPDATA%\audx` on Windows — so state lands in the expected place off macOS.
+- The `audx jam`/`launch` samples override and the `ai similar` command now read
+  the same `AUDX_SAMPLES_DIR` variable; previously one wrote it and the other
+  read a differently-named variable, so the override was silently ignored.
+
+### Changed
+- Config, samples, and projects directories are each overridable via
+  `AUDX_CONFIG_DIR`, `AUDX_SAMPLES_DIR`, and `AUDX_PROJECTS_DIR` (with `~`
+  expansion), which keeps audx predictable on headless boxes, CI, and containers.
+- Importing `audx` no longer creates directories as a side effect; the code that
+  writes into these paths creates them on demand.
+
 ## [0.3.0] - 2026-06-21
 
 ### Added

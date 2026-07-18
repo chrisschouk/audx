@@ -920,7 +920,7 @@ def ai_similar(
         console.print("[red]librosa not installed. uv sync --extra ai[/red]")
         raise typer.Exit(1) from err
 
-    dir_ = samples_dir or Path(os.getenv("AUDX_SAMPLES", str(SAMPLES_DIR)))
+    dir_ = samples_dir or Path(os.getenv("AUDX_SAMPLES_DIR", str(SAMPLES_DIR)))
     index = EmbeddingIndex.load_or_build(dir_)
     query_vec = compute_embedding(sample)
     matches = index.search(query_vec, limit=limit)
