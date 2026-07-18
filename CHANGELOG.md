@@ -24,6 +24,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to the wrong channel; both now report a friendly out-of-range error.
 - **Malformed rhythm specs report a clear error** instead of a Python traceback
   (e.g. `audx render "hh ax8"`).
+- **`| tune` now repitches real WAV samples**, not just synth voices — it was
+  silently ignored on the sample path. Samples repitch vari-speed (like a
+  hardware sampler), matching the synth kit and the docs.
+- **Euclidean rhythms land on the downbeat.** `e(4,16)` and friends previously
+  placed the first pulse late (nothing on step 0), contrary to the standard
+  convention; they now start on step 0. Hit counts are unchanged. The browser
+  DSL port and golden fixtures were updated in lockstep.
+- **Standalone audio package (`audx.audio`) DSP fixes** (not yet wired into the
+  CLI/TUI): the voice envelope was applied to the interleaved stereo buffer and
+  crashed on any sound; constant-power pan centred hard-left; long attack/release
+  ramps overran short buffers; and the mixer ignored channel solo. All fixed and
+  covered by new tests.
 
 ### Changed
 - The `--samples` override, the `ai similar` command, and the default sample
