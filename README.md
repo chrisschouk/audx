@@ -97,7 +97,7 @@ sudo apt install libportaudio2
 ```bash
 audx pattern create kick  "kick 4/4"                       # four on the floor
 audx pattern create snare "snare 2/8"                      # beats 2 and 4
-audx pattern create hats  "hh 16x8 | vel 0.45 | channel 2" # 8 hats over 16 steps
+audx pattern create hats  "hh 16x8 | vel 0.45 | channel 2" # 16 hats across the bar
 audx pattern create perc  "perc e(5,16,2)"                 # Euclidean, rotated
 audx pattern create clap  "clap [1.0.1.0.1.1.0.0]"         # explicit grid
 audx pattern create groove "x--- -x-- --x- ---x"           # x/rest grid

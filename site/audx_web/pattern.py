@@ -35,7 +35,7 @@ class Pattern:
 
     Supported DSL (spec §05):
     - ``kick 4/4``                            four on the floor
-    - ``hh 16x8``                             eight evenly-spaced hits over 16 steps
+    - ``hh 16x8``                             16 evenly-spaced hits across the bar
     - ``snare 2/8``                           hits on beats 2 and 4
     - ``perc e(5,16)`` / ``perc e(5,16,2)``   Euclidean rhythm, optional rotation
     - ``clap [1.0.1.0.1.1.0.0]``              explicit grid (1 = hit, 0/. = rest)
@@ -159,7 +159,8 @@ class Pattern:
 
     def _beats_for_spec(self, spec: str) -> list[float]:
         spec = spec.strip()
-        # 16x8 → 8 hits across 16 steps
+        # NxM → N evenly-spaced hits across the bar. The first number is the hit
+        # count; the second is currently not used (kept for notation familiarity).
         if "x" in spec.lower() and "/" not in spec:
             hits_str, _, _ = spec.lower().partition("x")
             hits = _spec_int(hits_str, spec, "1")
