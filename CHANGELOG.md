@@ -11,11 +11,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   config directory now follows each platform's convention — XDG
   (`~/.config/audx`) on Linux, `~/Library/Application Support/audx` on macOS, and
   `%APPDATA%\audx` on Windows — so state lands in the expected place off macOS.
-- The `audx jam`/`launch` samples override and the `ai similar` command now read
-  the same `AUDX_SAMPLES_DIR` variable; previously one wrote it and the other
-  read a differently-named variable, so the override was silently ignored.
+- **`gain` and `pan` pattern modifiers now affect offline renders.** They were
+  parsed but never applied, so `| gain -6db` and `| pan L100` produced audio
+  identical to the plain pattern. Pan uses a constant-power law that leaves a
+  centred (`pan 0`) hit untouched.
+- **`launch`/`open --samples DIR` now takes effect.** It set an environment
+  variable that was read too late (config resolves once at import), so the TUI's
+  audio engine ignored it; the option now points the engine's sample library at
+  the requested directory.
+- **`audx mix set` / `audx mute` no longer crash on a bad channel.** An
+  out-of-range channel raised a raw traceback and a negative one silently wrapped
+  to the wrong channel; both now report a friendly out-of-range error.
+- **Malformed rhythm specs report a clear error** instead of a Python traceback
+  (e.g. `audx render "hh ax8"`).
 
 ### Changed
+- The `--samples` override, the `ai similar` command, and the default sample
+  location all key off the single `AUDX_SAMPLES_DIR` variable (previously a
+  differently-named variable was written and never read).
 - Config, samples, and projects directories are each overridable via
   `AUDX_CONFIG_DIR`, `AUDX_SAMPLES_DIR`, and `AUDX_PROJECTS_DIR` (with `~`
   expansion), which keeps audx predictable on headless boxes, CI, and containers.
