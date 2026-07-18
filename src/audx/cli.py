@@ -403,14 +403,18 @@ def pattern_delete(name: str) -> None:
     typer.echo(f"Deleted {name}" if deleted else f"Pattern not found: {name}")
 
 
-# Backwards-compatible flat command names from the earlier sprint.
-@app.command("pattern-create")
+# Backwards-compatible flat command names from the earlier sprint. Kept working
+# for anyone who scripted against them, but hidden from `--help` so the
+# documented subcommand form (`audx pattern create`, …) is the one on show.
+@app.command("pattern-create", hidden=True)
 def pattern_create_flat(name: str, dsl: str) -> None:
+    """Deprecated alias for `audx pattern create`."""
     pattern_create(name, dsl)
 
 
-@app.command("patterns-list")
+@app.command("patterns-list", hidden=True)
 def pattern_list_flat() -> None:
+    """Deprecated alias for `audx pattern list`."""
     pattern_list()
 
 
@@ -440,14 +444,16 @@ def samples_list(
         typer.echo(f"{sample['name']} ({sample['duration']:.1f}s) tags={sample['tags']}")
 
 
-# Backwards-compatible flat names.
-@app.command("samples-index")
+# Backwards-compatible flat names (hidden; see note above).
+@app.command("samples-index", hidden=True)
 def samples_index_flat(directory: Path, recursive: bool = typer.Option(True, "--recursive/--no-recursive")) -> None:
+    """Deprecated alias for `audx samples index`."""
     samples_index(directory, recursive)
 
 
-@app.command("samples-list")
+@app.command("samples-list", hidden=True)
 def samples_list_flat(query: str = "", limit: int = 20) -> None:
+    """Deprecated alias for `audx samples list`."""
     samples_list(query=query, limit=limit)
 
 
@@ -462,8 +468,9 @@ def projects_list() -> None:
         typer.echo(f"{project.name} ({project.stat().st_size / 1024:.1f} KB)")
 
 
-@app.command("projects-list")
+@app.command("projects-list", hidden=True)
 def projects_list_flat() -> None:
+    """Deprecated alias for `audx projects list`."""
     projects_list()
 
 
