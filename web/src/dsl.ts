@@ -137,12 +137,16 @@ function euclideanGrid(pulses: number, steps: number, rotation = 0): number[] {
   if (pulses < 0 || steps <= 0) return new Array(Math.max(steps, 0)).fill(0);
   pulses = Math.min(pulses, steps);
   const grid = new Array(steps).fill(0);
-  let bucket = 0;
+  if (pulses === 0) return grid;
+  // Bresenham line: a pulse marks each change of `(i * pulses) / steps` floored.
+  // Distributes pulses evenly and always lands one on step 0 (the downbeat),
+  // matching the standard Euclidean-rhythm convention (and the Python port).
+  let prev = -1;
   for (let i = 0; i < steps; i++) {
-    bucket += pulses;
-    if (bucket >= steps) {
-      bucket -= steps;
+    const cur = Math.floor((i * pulses) / steps);
+    if (cur !== prev) {
       grid[i] = 1;
+      prev = cur;
     }
   }
   if (rotation) {

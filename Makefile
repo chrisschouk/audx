@@ -1,18 +1,17 @@
-.PHONY: test lint format build publish
+.PHONY: test lint format build publish-npm publish-py
 
 test:
-	pytest -q
+	uv run pytest -q
 
 lint:
-	flake8 src/
-	mypy src/
+	uv run ruff check src tests
+	uv run mypy src/audx
 
 format:
-	black src/ tests/
-	isort src/ tests/
+	uv run ruff check --fix src tests
 
 build:
-	python -m build
+	uv build
 
 publish-npm:
 	npm publish

@@ -74,16 +74,18 @@ class Voice:
             out[0::2] = seg[:, 0] * self.gain
             out[1::2] = seg[:, 1] * self.gain
 
-        # Pan (simple constant-power pan)
-        pan = self.pan
-        left_gain = np.cos(pan * np.pi / 4)  # 0..1
-        right_gain = np.sin(pan * np.pi / 4)
+        # Pan (constant-power). pan -1 = hard left, 0 = centre, +1 = hard right,
+        # so map [-1, 1] onto the [0, π/2] quarter-circle before taking cos/sin.
+        angle = (self.pan + 1.0) * (np.pi / 4.0)
+        left_gain = np.cos(angle)
+        right_gain = np.sin(angle)
         out[0::2] *= left_gain
         out[1::2] *= right_gain
 
-        # Envelope
+        # Envelope — computed per mono frame, applied to both interleaved channels.
         env = self._compute_envelope(available)
-        out *= env
+        out[0::2] *= env
+        out[1::2] *= env
 
         # Advance position
         self.pos += available / self.frequency_shift
@@ -104,9 +106,11 @@ class Voice:
         release_samples = int(self.envelope_release * sr)
 
         if self._env_state == "attack":
-            # ramp from 0 to 1
+            # ramp from 0 to 1; clip to the buffer when the attack is longer
+            # than this block so the multiply can't broadcast-mismatch.
             ramp = np.linspace(0, 1, attack_samples, dtype=np.float32)
-            env[:attack_samples] *= ramp
+            n = min(attack_samples, frames)
+            env[:n] *= ramp[:n]
             if frames > attack_samples:
                 self._env_state = "sustain"
                 self._env_current = 1.0
@@ -114,7 +118,8 @@ class Voice:
             env[:] = 1.0
         elif self._env_state == "release":
             ramp = np.linspace(1, 0, release_samples, dtype=np.float32)
-            env[:release_samples] *= ramp
+            n = min(release_samples, frames)
+            env[:n] *= ramp[:n]
             if frames > release_samples:
                 self._enabled = False
 

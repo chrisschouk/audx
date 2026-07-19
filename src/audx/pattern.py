@@ -35,7 +35,7 @@ class Pattern:
 
     Supported DSL (spec §05):
     - ``kick 4/4``                            four on the floor
-    - ``hh 16x8``                             eight evenly-spaced hits over 16 steps
+    - ``hh 16x8``                             16 evenly-spaced hits across the bar
     - ``snare 2/8``                           hits on beats 2 and 4
     - ``perc e(5,16)`` / ``perc e(5,16,2)``   Euclidean rhythm, optional rotation
     - ``clap [1.0.1.0.1.1.0.0]``              explicit grid (1 = hit, 0/. = rest)
@@ -159,17 +159,18 @@ class Pattern:
 
     def _beats_for_spec(self, spec: str) -> list[float]:
         spec = spec.strip()
-        # 16x8 → 8 hits across 16 steps
+        # NxM → N evenly-spaced hits across the bar. The first number is the hit
+        # count; the second is currently not used (kept for notation familiarity).
         if "x" in spec.lower() and "/" not in spec:
             hits_str, _, _ = spec.lower().partition("x")
-            hits = max(1, int(hits_str or "1"))
+            hits = _spec_int(hits_str, spec, "1")
             step_width = self.length_beats / hits
             return [i * step_width for i in range(hits)]
         # 4/4 (every beat) and 2/8 (beats 2 and 4)
         if "/" in spec:
             n_str, _, m_str = spec.partition("/")
-            n = max(1, int(n_str or "1"))
-            m = max(1, int(m_str or "4"))
+            n = _spec_int(n_str, spec, "1")
+            m = _spec_int(m_str, spec, "4")
             if n == m or m == 4:
                 # 4/4 → hit on every beat
                 step_width = self.length_beats / n
@@ -320,6 +321,20 @@ def _smart_split(text: str, sep: str) -> list[str]:
     return parts
 
 
+def _spec_int(text: str, spec: str, default: str) -> int:
+    """Parse a rhythm-spec integer, raising a friendly error on garbage input.
+
+    Keeps a typo like ``hh ax8`` from surfacing a bare ``ValueError`` traceback.
+    """
+    try:
+        return max(1, int(text or default))
+    except ValueError as exc:
+        raise ValueError(
+            f"invalid rhythm spec {spec!r}: expected numbers like '16x8', "
+            f"'4/4' or 'e(5,16)', got {text!r}"
+        ) from exc
+
+
 def _parse_percent(value: object, default: float = 0.0) -> float:
     if value is None or value == "":
         return default
@@ -395,12 +410,17 @@ def _euclidean_grid(pulses: int, steps: int, rotation: int = 0) -> list[int]:
         return [0] * max(steps, 0)
     pulses = min(pulses, steps)
     grid = [0] * steps
-    bucket = 0
+    if pulses == 0:
+        return grid
+    # Bresenham line: a pulse marks each change of ``(i * pulses) // steps``.
+    # This distributes the pulses as evenly as possible AND always lands one on
+    # step 0 (the downbeat), matching the standard Euclidean-rhythm convention.
+    prev = -1
     for i in range(steps):
-        bucket += pulses
-        if bucket >= steps:
-            bucket -= steps
+        cur = (i * pulses) // steps
+        if cur != prev:
             grid[i] = 1
+            prev = cur
     if rotation:
         rotation = rotation % steps
         grid = grid[-rotation:] + grid[:-rotation]

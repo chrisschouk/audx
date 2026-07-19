@@ -61,6 +61,20 @@ app.add_typer(song_app, name="song")
 pattern_app.add_typer(slot_app, name="slot")  # `audx pattern slot ...`
 
 
+def _check_channel(channel: int, channels: int) -> None:
+    """Reject out-of-range mixer channels with a friendly error.
+
+    Guards direct numpy indexing on the engine's channel arrays: a too-large
+    index would raise a raw ``IndexError`` traceback, and a negative index would
+    silently wrap and mutate the wrong channel.
+    """
+    if not 0 <= channel < channels:
+        typer.echo(
+            f"Channel {channel} out of range (valid: 0-{channels - 1}).", err=True
+        )
+        raise typer.Exit(1)
+
+
 def _pattern_payload() -> list[dict]:
     return [
         {
@@ -97,7 +111,9 @@ def launch(
     play here shows up live at ``http://<this-machine>:<port>/`` on any device.
     """
     if samples:
-        os.environ["AUDX_SAMPLES_DIR"] = str(samples)
+        from audx.sampler import set_sample_library_root
+
+        set_sample_library_root(samples)
     if project is not None:
         loaded = _load_project(project)
         typer.echo(f"Loaded project: {loaded.name}")
@@ -403,14 +419,18 @@ def pattern_delete(name: str) -> None:
     typer.echo(f"Deleted {name}" if deleted else f"Pattern not found: {name}")
 
 
-# Backwards-compatible flat command names from the earlier sprint.
-@app.command("pattern-create")
+# Backwards-compatible flat command names from the earlier sprint. Kept working
+# for anyone who scripted against them, but hidden from `--help` so the
+# documented subcommand form (`audx pattern create`, …) is the one on show.
+@app.command("pattern-create", hidden=True)
 def pattern_create_flat(name: str, dsl: str) -> None:
+    """Deprecated alias for `audx pattern create`."""
     pattern_create(name, dsl)
 
 
-@app.command("patterns-list")
+@app.command("patterns-list", hidden=True)
 def pattern_list_flat() -> None:
+    """Deprecated alias for `audx pattern list`."""
     pattern_list()
 
 
@@ -440,14 +460,16 @@ def samples_list(
         typer.echo(f"{sample['name']} ({sample['duration']:.1f}s) tags={sample['tags']}")
 
 
-# Backwards-compatible flat names.
-@app.command("samples-index")
+# Backwards-compatible flat names (hidden; see note above).
+@app.command("samples-index", hidden=True)
 def samples_index_flat(directory: Path, recursive: bool = typer.Option(True, "--recursive/--no-recursive")) -> None:
+    """Deprecated alias for `audx samples index`."""
     samples_index(directory, recursive)
 
 
-@app.command("samples-list")
+@app.command("samples-list", hidden=True)
 def samples_list_flat(query: str = "", limit: int = 20) -> None:
+    """Deprecated alias for `audx samples list`."""
     samples_list(query=query, limit=limit)
 
 
@@ -462,8 +484,9 @@ def projects_list() -> None:
         typer.echo(f"{project.name} ({project.stat().st_size / 1024:.1f} KB)")
 
 
-@app.command("projects-list")
+@app.command("projects-list", hidden=True)
 def projects_list_flat() -> None:
+    """Deprecated alias for `audx projects list`."""
     projects_list()
 
 
@@ -511,10 +534,18 @@ def render_pattern(
             typer.echo(f"  ✓ {target}")
         return
 
+    def _parse(dsl_text: str) -> Pattern:
+        pat = Pattern(name=name, dsl=dsl_text)
+        try:
+            pat.parse_dsl()
+        except ValueError as exc:
+            typer.echo(f"Pattern error: {exc}", err=True)
+            raise typer.Exit(1) from exc
+        return pat
+
     if variations and variations > 0:
         for i in range(1, variations + 1):
-            pat = Pattern(name=name, dsl=dsl)
-            pat.parse_dsl()
+            pat = _parse(dsl)
             arrangement = Arrangement(bpm=bpm)
             arrangement.add(pat, start_bar=0, bars=bars)
             target = output.with_name(f"{output.stem}_v{i:02d}{output.suffix}")
@@ -522,8 +553,7 @@ def render_pattern(
             typer.echo(f"  ✓ {target}")
         return
 
-    pattern = Pattern(name=name, dsl=dsl)
-    pattern.parse_dsl()
+    pattern = _parse(dsl)
     arrangement = Arrangement(bpm=bpm)
     arrangement.add(pattern, start_bar=0, bars=bars)
     path = render_arrangement(arrangement, library, output)
@@ -723,6 +753,7 @@ def mix_set(
 ) -> None:
     """Set a mixer parameter (spec §06)."""
     engine = get_engine() or init_engine()
+    _check_channel(channel, engine.channels)
     if param == "gain":
         try:
             db = float(value)
@@ -743,6 +774,7 @@ def mix_set(
 def mute_channel(channel: int = typer.Argument(..., help="Channel index (0-based)")) -> None:
     """Toggle mute on a channel."""
     engine = get_engine() or init_engine()
+    _check_channel(channel, engine.channels)
     engine.channel_mute[channel] = not bool(engine.channel_mute[channel])
     typer.echo(f"  ✓ ch {channel} mute {bool(engine.channel_mute[channel])}")
 
@@ -920,7 +952,7 @@ def ai_similar(
         console.print("[red]librosa not installed. uv sync --extra ai[/red]")
         raise typer.Exit(1) from err
 
-    dir_ = samples_dir or Path(os.getenv("AUDX_SAMPLES", str(SAMPLES_DIR)))
+    dir_ = samples_dir or Path(os.getenv("AUDX_SAMPLES_DIR", str(SAMPLES_DIR)))
     index = EmbeddingIndex.load_or_build(dir_)
     query_vec = compute_embedding(sample)
     matches = index.search(query_vec, limit=limit)

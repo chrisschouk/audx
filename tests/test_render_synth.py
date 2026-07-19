@@ -66,3 +66,50 @@ def test_synth_cache_reused(tmp_path: Path):
     # same cached object reused for the same voice/tune
     assert first is second
     assert len(cache) == 1
+
+
+def test_gain_db_modifier_attenuates_output(tmp_path: Path):
+    plain = _render("kick 4/4", tmp_path, name="plain")
+    quiet = _render("kick 4/4 | gain -6db", tmp_path, name="quiet")
+    plain_peak = float(np.max(np.abs(plain)))
+    quiet_peak = float(np.max(np.abs(quiet)))
+    # -6 dB is about 0.501x amplitude; must be clearly quieter, not identical.
+    assert quiet_peak == 0.0 or plain_peak > 0.0
+    assert quiet_peak < plain_peak * 0.6
+
+
+def test_pan_hard_left_silences_right_channel(tmp_path: Path):
+    data = _render("kick 4/4 | pan L100", tmp_path, name="left")
+    left_peak = float(np.max(np.abs(data[:, 0])))
+    right_peak = float(np.max(np.abs(data[:, 1])))
+    assert left_peak > 0.1
+    assert right_peak < 1e-4
+
+
+def test_pan_centre_leaves_channels_equal(tmp_path: Path):
+    data = _render("kick 4/4 | pan 0", tmp_path, name="centre")
+    assert np.allclose(data[:, 0], data[:, 1])
+
+
+def test_tune_repitches_real_samples(tmp_path: Path):
+    # A real sample must respond to `| tune` (vari-speed), not ignore it.
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    tone = np.sin(2 * np.pi * 220 * np.linspace(0, 1, 4410, endpoint=False))
+    sf.write(samples / "kick.wav", (0.5 * tone).astype(np.float32), 44100)
+    library = SampleLibrary(samples)
+    library.build_index(recursive=False)
+
+    def audio(dsl: str) -> np.ndarray:
+        pat = Pattern(name="k", dsl=dsl)
+        pat.parse_dsl()
+        out = _voice_audio(pat.steps[0], library, 44100, {})
+        assert out is not None
+        return out
+
+    base = audio("kick 4/4")
+    up_octave = audio("kick 4/4 | tune 12st")
+    down_octave = audio("kick 4/4 | tune -12st")
+    # +12 semitones plays twice as fast (half the frames); -12 doubles them.
+    assert abs(len(up_octave) - len(base) / 2) <= 2
+    assert abs(len(down_octave) - len(base) * 2) <= 2

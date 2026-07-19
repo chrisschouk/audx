@@ -15,6 +15,8 @@ from audx.pattern import Pattern
 from audx.sampler import SampleLibrary
 from audx.synth import is_synth_voice, synth_voice
 
+_SQRT2 = math.sqrt(2.0)
+
 
 @dataclass
 class Clip:
@@ -244,7 +246,20 @@ def _mix_clips(
                 if start >= total_frames or end <= start:
                     continue
                 gain = step.velocity * 0.7
-                mix[start:end] += data[: end - start] * gain
+                gain_db = getattr(step, "gain_db", 0.0)
+                if gain_db:
+                    gain *= 10.0 ** (gain_db / 20.0)
+                seg = data[: end - start] * gain
+                pan = getattr(step, "pan", 0.0)  # -1 = L, 0 = centre, +1 = R
+                if pan:
+                    # Constant-power pan, √2-normalised so pan=0 leaves both
+                    # channels at unity (identical to the un-panned path).
+                    angle = (pan + 1.0) * (math.pi / 4.0)
+                    seg = seg * np.array(
+                        [math.cos(angle) * _SQRT2, math.sin(angle) * _SQRT2],
+                        dtype=np.float32,
+                    )
+                mix[start:end] += seg
 
     return mix
 
@@ -277,6 +292,8 @@ def _voice_audio(
         data, source_sr = sf.read(str(sample_path), dtype="float32", always_2d=True)
         if source_sr != sample_rate:
             data = _resample_linear(data, source_sr, sample_rate)
+        if tune:
+            data = _repitch(data, tune)
         if data.shape[1] == 1:
             return np.repeat(data, 2, axis=1)
         return data[:, :2]
@@ -289,6 +306,22 @@ def _voice_audio(
             synth_cache[key] = cached
         return cached
     return None
+
+
+def _repitch(data: np.ndarray, semitones: float) -> np.ndarray:
+    """Vari-speed repitch by resampling (higher pitch = shorter, like a sampler).
+
+    Mirrors how the synth kit honours ``| tune`` so the modifier also works on
+    real WAV samples instead of being silently ignored.
+    """
+    if not semitones:
+        return data
+    ratio = 2.0 ** (semitones / 12.0)
+    target_len = max(1, round(len(data) / ratio))
+    old_x = np.linspace(0.0, 1.0, len(data), endpoint=False)
+    new_x = np.linspace(0.0, 1.0, target_len, endpoint=False)
+    channels = [np.interp(new_x, old_x, data[:, ch]) for ch in range(data.shape[1])]
+    return np.stack(channels, axis=1).astype(np.float32)
 
 
 def _resample_linear(data: np.ndarray, source_sr: int, target_sr: int) -> np.ndarray:
