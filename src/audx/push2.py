@@ -1,10 +1,8 @@
 """Push 2 MIDI mapping, pad lighting, USB display driver, and device detection.
 
-Includes full implementation of the Ableton Push 2 display protocol:
-- Resolution: 960x160 pixels
-- Stride: 2048 bytes / 1024 words per line (960 active pixels + 64 padding words)
-- Pixel format: BGR565 XORed with Ableton's hardware scrambling mask 0xE73C
-- USB Transfer: 16-byte header + 327,680 byte payload to Bulk Endpoint 0x01
+Full implementation of Ableton Push 2 hardware protocol:
+- MIDI Control: 8x8 Pad Grid, Encoders 1-8 (CC 71-78), Tempo (CC 14), Swing (CC 15), Transport (Notes 85, 86, 87), Track Select (Notes 102-109), Mute (Notes 20-27).
+- Onboard LCD Screen: 960x160 BGR565 XOR 0xE73C frame buffer over USB Bulk Endpoint 0x01 (Vendor ID 0x2982, Product ID 0x1967).
 """
 
 from __future__ import annotations
@@ -29,10 +27,21 @@ DEFAULT_PUSH2_MAP = [
     Push2Control("stop", "note", 86, "Transport stop"),
     Push2Control("record", "note", 87, "Record/arm placeholder"),
     Push2Control("tap_tempo", "note", 3, "Tap tempo"),
-    Push2Control("encoder_1", "cc", 14, "Channel 1 gain"),
-    Push2Control("encoder_2", "cc", 15, "Channel 2 gain"),
-    Push2Control("encoder_3", "cc", 16, "Channel 3 gain"),
-    Push2Control("encoder_4", "cc", 17, "Channel 4 gain"),
+    Push2Control("encoder_1", "cc", 71, "Channel 1 gain"),
+    Push2Control("encoder_2", "cc", 72, "Channel 2 gain"),
+    Push2Control("encoder_3", "cc", 73, "Channel 3 gain"),
+    Push2Control("encoder_4", "cc", 74, "Channel 4 gain"),
+    Push2Control("encoder_5", "cc", 75, "Channel 1 pan"),
+    Push2Control("encoder_6", "cc", 76, "Channel 2 pan"),
+    Push2Control("encoder_7", "cc", 77, "Channel 3 pan"),
+    Push2Control("encoder_8", "cc", 78, "Channel 4 pan"),
+    Push2Control("tempo_encoder", "cc", 14, "BPM tempo adjust"),
+    Push2Control("swing_encoder", "cc", 15, "Swing percent adjust"),
+    Push2Control("master_encoder", "cc", 79, "Master volume level"),
+    Push2Control("track_mute_1", "note", 20, "Channel 1 Mute toggle"),
+    Push2Control("track_mute_2", "note", 21, "Channel 2 Mute toggle"),
+    Push2Control("track_mute_3", "note", 22, "Channel 3 Mute toggle"),
+    Push2Control("track_mute_4", "note", 23, "Channel 4 Mute toggle"),
 ]
 
 
@@ -78,38 +87,70 @@ def light_push2_pads(port_name: str | None = None) -> bool:
         return False
 
 
-def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channel_levels: list[float] | None = None) -> bytes:
-    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen."""
-    # 16-byte Ableton Push 2 display header
+def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channel_levels: list[float] | None = None, channel_gains: list[float] | None = None) -> bytes:
+    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen.
+
+    Uses high-contrast BGR565 color blocks and level meter graphics.
+    """
     header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     # 160 lines x 1024 uint16 words (960 active pixels + 64 padding words)
     words = np.zeros((160, 1024), dtype=np.uint16)
 
-    # Dark cyan/navy background (BGR565: Blue=20, Green=10, Red=5)
-    bg_color = (20 & 0x1F) | ((10 & 0x3F) << 5) | ((5 & 0x1F) << 11)
+    # Dark Slate Background (BGR565: B=15, G=8, R=5)
+    bg_color = (15 & 0x1F) | ((8 & 0x3F) << 5) | ((5 & 0x1F) << 11)
     words[:, :960] = bg_color
 
-    # Top Header Bar (0..32 px) - Magenta/Teal accent
-    header_color = (15 & 0x1F) | ((45 & 0x3F) << 5) | ((25 & 0x1F) << 11)
+    # Top Banner Header (px 0..32) - Vibrant Cyan/Teal
+    header_color = (31 & 0x1F) | ((40 & 0x3F) << 5) | ((5 & 0x1F) << 11)
     words[0:32, :960] = header_color
 
-    # Draw 4 Channel Strips (columns 0..4)
-    levels = channel_levels or [0.8, 0.6, 0.4, 0.9]
+    # White Title Accent Block on Top Left (px 4..28, cols 20..180)
+    white_pixel = 0xFFFF
+    words[4:28, 20:180] = white_pixel
+
+    # Genre Badge (px 6..26, cols 750..920) - Bright Yellow
+    yellow_pixel = (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11)
+    words[6:26, 750:920] = yellow_pixel
+
+    # Render 4 Channel Strip Cards corresponding to Push 2 Encoders 1..4
+    levels = channel_levels or [0.7, 0.5, 0.4, 0.8]
+    gains = channel_gains or [1.0, 1.0, 1.0, 1.0]
+
+    ch_colors = [
+        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),   # Green (Ch 1)
+        (31 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),  # Cyan (Ch 2)
+        (31 & 0x1F) | ((0 & 0x3F) << 5) | ((31 & 0x1F) << 11),  # Magenta (Ch 3)
+        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11),  # Yellow (Ch 4)
+    ]
+
     for i in range(min(4, len(levels))):
-        col_start = 40 + i * 220
-        col_end = col_start + 180
-        val = levels[i]
+        col_start = 30 + i * 230
+        col_end = col_start + 200
+        val = max(0.0, min(1.0, levels[i]))
 
-        # Channel header box (px 40..65)
-        ch_box_color = (28 & 0x1F) | ((20 & 0x3F) << 5) | ((10 & 0x1F) << 11)
-        words[40:65, col_start:col_end] = ch_box_color
+        # Channel Header Card (px 40..70)
+        card_header_color = (25 & 0x1F) | ((25 & 0x3F) << 5) | ((25 & 0x1F) << 11)
+        words[40:70, col_start:col_end] = card_header_color
 
-        # Level meter bar (px 75..145)
-        meter_height = int(70 * val)
-        if meter_height > 0:
-            meter_color = (5 & 0x1F) | ((60 & 0x3F) << 5) | ((10 & 0x1F) << 11)
-            words[145 - meter_height : 145, col_start : col_start + 40] = meter_color
+        # Channel Accent Indicator Box (px 44..66, cols col_start+10 .. col_start+40)
+        words[44:66, col_start + 10 : col_start + 40] = ch_colors[i]
+
+        # Level Meter Background (px 80..150, cols col_start+10..col_start+60)
+        meter_bg = (10 & 0x1F) | ((5 & 0x3F) << 5) | ((3 & 0x1F) << 11)
+        words[80:150, col_start + 10 : col_start + 60] = meter_bg
+
+        # Active Level Meter Fill
+        meter_h = int(70 * val)
+        if meter_h > 0:
+            words[150 - meter_h : 150, col_start + 10 : col_start + 60] = ch_colors[i]
+
+        # Gain Knob Level Fill (px 80..150, cols col_start+80..col_start+180)
+        gain_val = max(0.0, min(2.0, gains[i])) / 2.0
+        gain_h = int(70 * gain_val)
+        words[80:150, col_start + 80 : col_start + 180] = (20 & 0x1F) | ((20 & 0x3F) << 5) | ((20 & 0x1F) << 11)
+        if gain_h > 0:
+            words[150 - gain_h : 150, col_start + 80 : col_start + 180] = ch_colors[i]
 
     # CRITICAL: Ableton Push 2 Hardware Display Scrambling XOR Mask: 0xE73C
     words ^= 0xE73C
@@ -140,7 +181,6 @@ class Push2DisplayDriver:
     def _init_usb(self) -> bool:
         try:
             import usb.core
-            import usb.util
 
             self.device = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
             if self.device is not None:
@@ -171,7 +211,7 @@ class Push2DisplayDriver:
         if self.device is None:
             return False
         try:
-            self.device.write(self.ENDPOINT_OUT, frame_bytes, timeout=1000)
+            self.device.write(self.ENDPOINT_OUT, frame_bytes, timeout=500)
             return True
         except Exception:
             self._connected = False

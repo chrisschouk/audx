@@ -232,11 +232,12 @@ def jam_command(
                 try:
                     eng = get_engine()
                     ch_levels = list(eng.get_channel_levels()) if eng else [0.5, 0.5, 0.5, 0.5]
-                    frame = render_push2_display_frame(bpm=effective_bpm, genre=selected_genre.value.upper(), channel_levels=ch_levels)
+                    ch_gains = [float(g) for g in eng.channel_gain[:4]] if eng else [1.0, 1.0, 1.0, 1.0]
+                    frame = render_push2_display_frame(bpm=effective_bpm, genre=selected_genre.value.upper(), channel_levels=ch_levels, channel_gains=ch_gains)
                     push2_disp.send_frame(frame)
                 except Exception:
                     pass
-                time.sleep(0.1)
+                time.sleep(0.04)
 
         dt = threading.Thread(target=_push2_display_loop, daemon=True)
         dt.start()
@@ -273,13 +274,44 @@ def jam_command(
                 with mido.open_input(push_in_name) as port:
                     for msg in port:
                         if msg.type == "note_on" and msg.velocity > 0:
+                            if msg.note == 85:
+                                get_pattern_engine().start()
+                                continue
+                            elif msg.note == 86:
+                                get_pattern_engine().stop()
+                                continue
+                            elif 20 <= msg.note <= 27:
+                                ch_idx = msg.note - 20
+                                eng = get_engine()
+                                if eng and ch_idx < eng.channels:
+                                    eng.set_channel_mute(ch_idx, not eng.channel_mute[ch_idx])
+                                continue
+
                             sample_name, ch = _get_midi_note_sample(msg.note)
-                            # Loud, punchy velocity curve (0.6..1.0 gain)
                             scaled_gain = 0.6 + 0.4 * (msg.velocity / 127.0)
                             eng = get_engine()
                             if eng:
                                 eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
                             active_hits[sample_name] = time.time()
+                        elif msg.type == "control_change":
+                            if 71 <= msg.control <= 74:
+                                ch_idx = msg.control - 71
+                                delta = 0.05 if msg.value < 64 else -0.05
+                                eng = get_engine()
+                                if eng and ch_idx < eng.channels:
+                                    cur = float(eng.channel_gain[ch_idx])
+                                    eng.set_channel_gain(ch_idx, max(0.0, min(2.0, cur + delta)))
+                            elif 75 <= msg.control <= 78:
+                                ch_idx = msg.control - 75
+                                delta = 0.05 if msg.value < 64 else -0.05
+                                eng = get_engine()
+                                if eng and ch_idx < eng.channels:
+                                    cur_pan = float(eng.channel_pan[ch_idx])
+                                    eng.set_channel_pan(ch_idx, max(-1.0, min(1.0, cur_pan + delta)))
+                            elif msg.control == 14:
+                                delta_bpm = 1.0 if msg.value < 64 else -1.0
+                                cur_bpm = get_pattern_engine().bpm
+                                get_pattern_engine().set_bpm(max(40.0, min(240.0, cur_bpm + delta_bpm)))
             except Exception:
                 pass
 

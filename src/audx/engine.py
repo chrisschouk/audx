@@ -151,6 +151,10 @@ class AudioEngine:
         with self.lock:
             self.channel_pan[channel] = np.clip(pan, -1, 1)
 
+    def set_channel_mute(self, channel: int, mute: bool) -> None:
+        with self.lock:
+            self.channel_mute[channel] = bool(mute)
+
     def set_master(self, level: float) -> None:
         with self.lock:
             self.master_level = np.clip(level, 0.0, 2.0)
