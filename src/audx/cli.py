@@ -215,6 +215,7 @@ def jam_command(
     for p in patterns:
         console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
 
+    from audx.midi import list_inputs
     from audx.push2 import (
         Push2DisplayDriver,
         find_push2_input,
@@ -268,69 +269,79 @@ def jam_command(
             note_name = notes[note % 12]
             return (f"{note_name}{octave}", 3)
 
-    last_hit_log = ["No pad hits yet."]
+    last_hit_log = ["No pad hits yet (Keys 1-4 or Push 2 pads)."]
 
-    if push_in_name:
-        import threading
+    def _trigger_pad_hit(sample_name: str, ch: int, vel: int, source: str = "Push 2") -> None:
+        eng = get_engine()
+        scaled_gain = max(0.4, vel / 127.0)
+        if eng:
+            eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
+        active_hits[sample_name] = time.time()
+        active_hits["kick" if "kick" in sample_name else ("snare" if "snare" in sample_name else ("hats" if "hat" in sample_name else "bass"))] = time.time()
+        last_hit_log[0] = f"⚡ {source} Hit -> {sample_name} (vel {vel})"
 
-        def _push2_listener() -> None:
-            try:
-                import mido
+    def _midi_input_worker(port_name: str) -> None:
+        try:
+            import mido
 
-                with mido.open_input(push_in_name) as port:
-                    for msg in port:
-                        if msg.type == "note_on" and msg.velocity > 0:
-                            # Push 2 Capacitive Encoder Touch Sensors (Notes 0..11) - DO NOT play voice sample!
-                            if 0 <= msg.note <= 11:
-                                continue
-
-                            if msg.note == 85:  # Play button
-                                get_pattern_engine().start()
-                                continue
-                            elif msg.note == 86:  # Stop button
-                                get_pattern_engine().stop()
-                                continue
-                            elif 20 <= msg.note <= 27:  # Track Mute buttons 1..8
-                                ch_idx = msg.note - 20
-                                eng = get_engine()
-                                if eng and ch_idx < eng.channels:
-                                    eng.set_channel_mute(ch_idx, not eng.channel_mute[ch_idx])
-                                continue
-
-                            # Drum Pads (36..99)
-                            sample_name, ch = _get_midi_note_sample(msg.note)
-                            scaled_gain = max(0.4, msg.velocity / 127.0)
+            with mido.open_input(port_name) as port:
+                for msg in port:
+                    if msg.type == "note_on" and msg.velocity > 0:
+                        if 0 <= msg.note <= 11:
+                            continue
+                        if msg.note == 85:
+                            get_pattern_engine().start()
+                            continue
+                        elif msg.note == 86:
+                            get_pattern_engine().stop()
+                            continue
+                        elif 20 <= msg.note <= 27:
+                            ch_idx = msg.note - 20
                             eng = get_engine()
-                            if eng:
-                                eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
-                            active_hits[sample_name] = time.time()
-                            active_hits["kick" if "kick" in sample_name else ("snare" if "snare" in sample_name else ("hats" if "hat" in sample_name else "bass"))] = time.time()
-                            last_hit_log[0] = f"⚡ Push 2 Pad {msg.note} -> {sample_name} (vel {msg.velocity})"
-                        elif msg.type == "control_change":
-                            # Encoders 1..4 (CC 71..74) -> Channel 0..3 Gain / Volume
-                            if 71 <= msg.control <= 74:
-                                ch_idx = msg.control - 71
-                                delta = 0.05 if msg.value < 64 else -0.05
-                                eng = get_engine()
-                                if eng and ch_idx < eng.channels:
-                                    cur = float(eng.channel_gain[ch_idx])
-                                    eng.set_channel_gain(ch_idx, max(0.0, min(2.0, cur + delta)))
-                            elif 75 <= msg.control <= 78:
-                                ch_idx = msg.control - 75
-                                delta = 0.05 if msg.value < 64 else -0.05
-                                eng = get_engine()
-                                if eng and ch_idx < eng.channels:
-                                    cur_pan = float(eng.channel_pan[ch_idx])
-                                    eng.set_channel_pan(ch_idx, max(-1.0, min(1.0, cur_pan + delta)))
-                            elif msg.control == 14:  # Tempo Encoder
-                                delta_bpm = 1.0 if msg.value < 64 else -1.0
-                                cur_bpm = get_pattern_engine().bpm
-                                get_pattern_engine().set_bpm(max(40.0, min(240.0, cur_bpm + delta_bpm)))
+                            if eng and ch_idx < eng.channels:
+                                eng.set_channel_mute(ch_idx, not eng.channel_mute[ch_idx])
+                            continue
+
+                        sample_name, ch = _get_midi_note_sample(msg.note)
+                        _trigger_pad_hit(sample_name, ch, msg.velocity, source="Push 2")
+                    elif msg.type == "control_change":
+                        if 71 <= msg.control <= 74:
+                            ch_idx = msg.control - 71
+                            delta = 0.05 if msg.value < 64 else -0.05
+                            eng = get_engine()
+                            if eng and ch_idx < eng.channels:
+                                cur = float(eng.channel_gain[ch_idx])
+                                eng.set_channel_gain(ch_idx, max(0.0, min(2.0, cur + delta)))
+                        elif 75 <= msg.control <= 78:
+                            ch_idx = msg.control - 75
+                            delta = 0.05 if msg.value < 64 else -0.05
+                            eng = get_engine()
+                            if eng and ch_idx < eng.channels:
+                                cur_pan = float(eng.channel_pan[ch_idx])
+                                eng.set_channel_pan(ch_idx, max(-1.0, min(1.0, cur_pan + delta)))
+                        elif msg.control == 14:
+                            delta_bpm = 1.0 if msg.value < 64 else -1.0
+                            cur_bpm = get_pattern_engine().bpm
+                            get_pattern_engine().set_bpm(max(40.0, min(240.0, cur_bpm + delta_bpm)))
+        except Exception:
+            pass
+
+    import threading
+
+    def _auto_reconnect_midi() -> None:
+        connected_port: str | None = None
+        while True:
+            try:
+                current = find_push2_input() or (list_inputs()[0] if list_inputs() else None)
+                if current and current != connected_port:
+                    connected_port = current
+                    t = threading.Thread(target=_midi_input_worker, args=(current,), daemon=True)
+                    t.start()
             except Exception:
                 pass
+            time.sleep(1.0)
 
-        t = threading.Thread(target=_push2_listener, daemon=True)
-        t.start()
+    threading.Thread(target=_auto_reconnect_midi, daemon=True).start()
 
     try:
         eng = init_engine()
