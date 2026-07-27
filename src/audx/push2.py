@@ -181,6 +181,7 @@ class Push2DisplayDriver:
     def _init_usb(self) -> bool:
         try:
             import usb.core
+            import usb.util
 
             self.device = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
             if self.device is not None:
@@ -190,7 +191,7 @@ class Push2DisplayDriver:
                 except Exception:
                     pass
                 try:
-                    self.device.set_configuration()
+                    usb.util.claim_interface(self.device, 0)
                 except Exception:
                     pass
                 self._connected = True
