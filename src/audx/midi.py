@@ -12,16 +12,45 @@ import mido
 from audx.pattern import Pattern
 
 
-def list_outputs() -> list[str]:
+def _init_mido_backend() -> None:
     try:
-        return list(mido.get_output_names())
+        import rtmidi  # noqa: F401
+
+        mido.set_backend("mido.backends.rtmidi")
+    except Exception:
+        pass
+
+
+def list_outputs() -> list[str]:
+    _init_mido_backend()
+    try:
+        names = list(mido.get_output_names())
+        if names:
+            return names
+    except Exception:
+        pass
+    try:
+        import rtmidi
+
+        mo = rtmidi.MidiOut()
+        return [str(p) for p in mo.get_ports()]
     except Exception:
         return []
 
 
 def list_inputs() -> list[str]:
+    _init_mido_backend()
     try:
-        return list(mido.get_input_names())
+        names = list(mido.get_input_names())
+        if names:
+            return names
+    except Exception:
+        pass
+    try:
+        import rtmidi
+
+        mi = rtmidi.MidiIn()
+        return [str(p) for p in mi.get_ports()]
     except Exception:
         return []
 

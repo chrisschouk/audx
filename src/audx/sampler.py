@@ -16,6 +16,9 @@ def get_sample_library() -> SampleLibrary:
         from audx.config import SAMPLES_DIR
 
         _global_library = SampleLibrary(SAMPLES_DIR)
+        _global_library.load_index()
+        if len(_global_library.samples) == 0:
+            _global_library.auto_scan_hd()
     return _global_library
 
 
@@ -40,7 +43,9 @@ class SampleLibrary:
 
     def auto_scan_hd(self) -> dict[str, int]:
         """Automatically scan standard user audio directories across the system."""
-        home = Path.home()
+        from audx.config import HOME
+
+        home = HOME
         target_dirs = [
             self.root,
             home / "Music",
@@ -161,11 +166,21 @@ class SampleLibrary:
     def resolve(self, sample_name: str) -> Path | None:
         if not self.samples:
             self.load_index()
+        target = Path(sample_name)
+        if target.is_absolute() and target.exists():
+            return target
         query = sample_name.lower()
         for meta in self.samples.values():
-            if meta["name"].lower() == query or Path(meta["name"]).stem.lower() == query:
-                return Path(meta["path"])
+            if meta["name"].lower() == query or Path(meta["name"]).stem.lower() == query or meta["path"].lower() == query:
+                p = Path(meta["path"])
+                if p.exists():
+                    return p
         matches = self.search(query=sample_name, limit=1)
         if matches:
-            return Path(matches[0]["path"])
+            p = Path(matches[0]["path"])
+            if p.exists():
+                return p
+        rel_path = self.root / sample_name
+        if rel_path.exists():
+            return rel_path
         return None
