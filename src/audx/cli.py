@@ -195,6 +195,10 @@ def jam_command(
         jam_bpm = proj.bpm
         patterns = list(get_pattern_engine().patterns.values())
 
+    get_pattern_engine().clear_patterns()
+    for p in patterns:
+        get_pattern_engine().add_pattern(p)
+
     effective_bpm = bpm or jam_bpm
     get_pattern_engine().set_bpm(effective_bpm)
 

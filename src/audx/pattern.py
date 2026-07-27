@@ -464,6 +464,9 @@ class PatternEngine:
     def remove_pattern(self, name: str) -> bool:
         return self.patterns.pop(name, None) is not None
 
+    def clear_patterns(self) -> None:
+        self.patterns.clear()
+
     def set_bpm(self, bpm: float) -> None:
         self.bpm = max(1.0, float(bpm))
 
