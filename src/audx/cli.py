@@ -211,6 +211,13 @@ def jam_command(
     for p in patterns:
         console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
 
+    from audx.push2 import find_push2_output, light_push2_pads
+
+    push_out = find_push2_output()
+    if push_out:
+        if light_push2_pads(push_out):
+            console.print(f"  [bold green]✓ Push 2 pad LEDs illuminated on '{push_out}'[/bold green]")
+
     try:
         eng = init_engine()
         get_pattern_engine().start()
@@ -271,9 +278,15 @@ def doctor() -> None:
 
     try:
         from audx.midi import list_inputs, list_outputs
+        from audx.push2 import find_push2_input, find_push2_output
 
         ins, outs = list_inputs(), list_outputs()
-        table.add_row("MIDI Ports", "✓ OK", f"inputs: {len(ins)}, outputs: {len(outs)}")
+        push_in = find_push2_input()
+        push_out = find_push2_output()
+        if push_in or push_out:
+            table.add_row("MIDI / Push 2", "✓ OK", f"Push 2 detected (in: {push_in or 'none'}, out: {push_out or 'none'})")
+        else:
+            table.add_row("MIDI Ports", "✓ OK" if (ins or outs) else "· None detected", f"inputs: {len(ins)}, outputs: {len(outs)}")
     except Exception as exc:
         table.add_row("MIDI Ports", "[yellow]· Warning[/yellow]", str(exc))
 
@@ -812,10 +825,19 @@ def samples_scan() -> None:
 def push2_lights() -> None:
     """Test and control Push 2 pad LED lighting grid."""
     from rich.panel import Panel
+    from audx.push2 import find_push2_output, light_push2_pads
+
+    out_port = find_push2_output()
+    lit = light_push2_pads(out_port)
 
     grid = "\n".join(["[green]●[/green] [red]●[/red] [blue]●[/blue] [yellow]●[/yellow] [cyan]●[/cyan] [magenta]●[/magenta] [white]●[/white] [green]●[/green]" for _ in range(8)])
     console.print(Panel(grid, title="Push 2 LED Pad Grid Test", border_style="cyan"))
-    typer.echo("Push 2 LED grid test pattern active.")
+
+    if lit:
+        console.print(f"  [bold green]✓ Push 2 pad LED light pattern sent to '{out_port}'![/bold green]")
+    else:
+        console.print("  [yellow]· Push 2 hardware not detected on MIDI output ports.[/yellow]")
+        console.print("    [dim]Tip: Connect Push 2 USB & ensure Ableton Live is closed (or releasing MIDI ports).[/dim]")
 
 
 @song_app.command("render")
