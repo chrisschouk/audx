@@ -181,24 +181,44 @@ class Voice:
         raise NotImplementedError
 
 
+_SAMPLE_CACHE: dict[str, tuple[np.ndarray, int]] = {}
+
+
+def get_cached_sample_data(sample_path: str) -> tuple[np.ndarray, int]:
+    """Retrieve pre-loaded float32 numpy audio buffer without disk I/O in realtime audio thread."""
+    if sample_path in _SAMPLE_CACHE:
+        return _SAMPLE_CACHE[sample_path]
+
+    try:
+        data, sr = sf.read(sample_path, dtype="float32", always_2d=False)
+        data_arr = cast(np.ndarray, data)
+        if data_arr.ndim > 1:
+            data_arr = cast(np.ndarray, np.mean(data_arr, axis=1))
+        data_arr = cast(np.ndarray, data_arr.astype(np.float32))
+
+        max_samples = int(sr * 3.0)
+        if len(data_arr) > max_samples:
+            data_arr = data_arr[:max_samples]
+
+        _SAMPLE_CACHE[sample_path] = (data_arr, int(sr))
+        return data_arr, int(sr)
+    except Exception:
+        fallback = np.zeros(1, dtype=np.float32)
+        return fallback, 44100
+
+
 class SampleVoice(Voice):
     def __init__(self, sample_path: str, channel: int, gain: float, pan: float, **kwargs: Any):
         super().__init__(channel, gain, pan)
         self.sample_path = sample_path
-        self.loop = kwargs.get('loop', False)
-        self.start_frame = kwargs.get('start_frame', 0)
-        try:
-            data, sr = sf.read(sample_path, dtype='float32', always_2d=False)
-            self.data = cast(np.ndarray, data)
-            self.sr = int(sr)
-            if self.data.ndim > 1:
-                self.data = cast(np.ndarray, np.mean(self.data, axis=1))
-            self.data = cast(np.ndarray, self.data.astype(np.float32))
-            self.position = self.start_frame
-            self.length = len(self.data)
-        except Exception:
-            self.is_active = False
-            self.data = np.zeros(1, dtype=np.float32)
+        self.loop = kwargs.get("loop", False)
+        self.start_frame = kwargs.get("start_frame", 0)
+        data, sr = get_cached_sample_data(sample_path)
+        self.data = data
+        self.sr = sr
+        self.position = self.start_frame
+        self.length = len(self.data)
+        self.is_active = len(self.data) > 1
 
     def generate(self, frames: int, sr: int) -> np.ndarray:
         if not self.is_active:
