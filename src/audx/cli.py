@@ -825,6 +825,7 @@ def samples_scan() -> None:
 def push2_lights() -> None:
     """Test and control Push 2 pad LED lighting grid."""
     from rich.panel import Panel
+
     from audx.push2 import find_push2_output, light_push2_pads
 
     out_port = find_push2_output()
