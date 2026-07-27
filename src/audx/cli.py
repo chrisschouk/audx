@@ -89,10 +89,18 @@ def _load_project(path: Path) -> Project:
 def launch(
     project: Path | None = typer.Argument(None, help="Path to .audx project file"),
     samples: Path | None = typer.Option(None, "--samples", "-s", help="Samples directory"),
+    serve: bool = typer.Option(False, "--serve", help="Also host the live dashboard (watch on your phone)"),
+    serve_port: int = typer.Option(8080, "--serve-port", help="Dashboard port"),
 ) -> None:
-    """Launch the audx TUI."""
+    """Launch the audx TUI.
+
+    With ``--serve`` the TUI also hosts the read-only dashboard, so the session you
+    play here shows up live at ``http://<this-machine>:<port>/`` on any device.
+    """
     if samples:
-        os.environ["AUDX_SAMPLES_DIR"] = str(samples)
+        from audx.sampler import set_sample_library_root
+
+        set_sample_library_root(samples)
     if project is not None:
         loaded = _load_project(project)
         typer.echo(f"Loaded project: {loaded.name}")
@@ -106,6 +114,12 @@ def launch(
                 raise
             except Exception as exc:
                 typer.echo(f"Could not auto-load last project: {exc}", err=True)
+    if serve:
+        from audx.web import serve_in_background
+
+        # 0.0.0.0 so a phone on the same Wi-Fi can reach it; the dashboard is read-only.
+        serve_in_background(host="0.0.0.0", port=serve_port)
+        typer.echo(f"  ✓ dashboard live on http://localhost:{serve_port}/  (and your LAN IP)")
     DAWApp(project=project, samples_dir=samples).run()
 
 
@@ -687,11 +701,13 @@ def pattern_step(
 # Backwards-compatible flat command names from the earlier sprint.
 @app.command("pattern-create")
 def pattern_create_flat(name: str, dsl: str) -> None:
+    """Deprecated alias for `audx pattern create`."""
     pattern_create(name, dsl)
 
 
-@app.command("patterns-list")
+@app.command("patterns-list", hidden=True)
 def pattern_list_flat() -> None:
+    """Deprecated alias for `audx pattern list`."""
     pattern_list()
 
 
@@ -721,14 +737,16 @@ def samples_list(
         typer.echo(f"{sample['name']} ({sample['duration']:.1f}s) tags={sample['tags']}")
 
 
-# Backwards-compatible flat names.
-@app.command("samples-index")
+# Backwards-compatible flat names (hidden; see note above).
+@app.command("samples-index", hidden=True)
 def samples_index_flat(directory: Path, recursive: bool = typer.Option(True, "--recursive/--no-recursive")) -> None:
+    """Deprecated alias for `audx samples index`."""
     samples_index(directory, recursive)
 
 
-@app.command("samples-list")
+@app.command("samples-list", hidden=True)
 def samples_list_flat(query: str = "", limit: int = 20) -> None:
+    """Deprecated alias for `audx samples list`."""
     samples_list(query=query, limit=limit)
 
 
@@ -743,8 +761,9 @@ def projects_list() -> None:
         typer.echo(f"{project.name} ({project.stat().st_size / 1024:.1f} KB)")
 
 
-@app.command("projects-list")
+@app.command("projects-list", hidden=True)
 def projects_list_flat() -> None:
+    """Deprecated alias for `audx projects list`."""
     projects_list()
 
 
@@ -752,7 +771,9 @@ def projects_list_flat() -> None:
 def render_pattern(
     dsl: str = typer.Argument(..., help="Pattern DSL to render"),
     output: Path = typer.Option(Path("render.wav"), "--output", "-o", help="Output WAV path"),
-    sample: Path = typer.Option(..., "--sample", help="Sample file to trigger"),
+    sample: Path | None = typer.Option(
+        None, "--sample", help="Sample file to trigger (omit to use the built-in synth kit)"
+    ),
     bpm: float = typer.Option(128.0, "--bpm", help="BPM"),
     bars: int = typer.Option(4, "--bars", help="Number of bars"),
     stems: bool = typer.Option(False, "--stems", help="Render each pattern to its own WAV"),
@@ -1080,6 +1101,28 @@ def push2_map() -> None:
 
     for control in list_push2_map():
         typer.echo(f"{control.name}\t{control.midi_type}\t{control.number}\t{control.description}")
+
+
+@push2_app.command("lights")
+def push2_lights() -> None:
+    """Light up the Push 2 drum kit (no audio) — a quick LED check."""
+    import time
+
+    from audx.push2 import open_push2_lights, push2_pad_layout
+
+    lights = open_push2_lights()
+    if lights is None:
+        typer.echo("No Push 2 output found. Connect it and check `audx midi list`.", err=True)
+        raise typer.Exit(1)
+    layout = push2_pad_layout()
+    lights.setup(layout)
+    typer.echo(f"  ✓ lit {len(layout)} pads. Ctrl-C to clear.")
+    try:
+        while True:
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        lights.close()
+        typer.echo("\n  cleared.")
 
 
 @heartmula_app.command("status")

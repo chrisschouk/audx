@@ -1,0 +1,115 @@
+"""Tests for synth-fallback rendering and the demo arrangement."""
+
+from pathlib import Path
+
+import numpy as np
+import soundfile as sf
+
+from audx.arrangement import Arrangement, _voice_audio, render_arrangement
+from audx.pattern import Pattern
+from audx.sampler import SampleLibrary
+
+
+def _render(dsl: str, tmp_path: Path, name: str = "t", bars: int = 1) -> np.ndarray:
+    library = SampleLibrary(tmp_path / "empty")  # no samples → synth fallback
+    pattern = Pattern(name=name, dsl=dsl)
+    pattern.parse_dsl()
+    arr = Arrangement(bpm=120)
+    arr.add(pattern, bars=bars)
+    out = render_arrangement(arr, library, tmp_path / f"{name}.wav")
+    data, _ = sf.read(out, always_2d=True)
+    return data
+
+
+def test_synth_render_makes_sound_without_samples(tmp_path: Path):
+    data = _render("kick 4/4", tmp_path)
+    assert data.shape[1] == 2
+    assert float(np.max(np.abs(data))) > 0.0
+
+
+def test_unknown_instrument_renders_silence_not_crash(tmp_path: Path):
+    # 'wobble' is neither a sample nor a synth voice -> skipped, silent, no crash
+    data = _render("wobble 4/4", tmp_path)
+    assert float(np.max(np.abs(data))) == 0.0
+
+
+def test_real_sample_takes_priority_over_synth(tmp_path: Path):
+    # A file literally named kick.wav should be used instead of the synth.
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    sf.write(samples / "kick.wav", np.ones((50, 1), dtype=np.float32) * 0.5, 44100)
+    library = SampleLibrary(samples)
+    library.build_index(recursive=False)
+    step = Pattern(name="k", dsl="kick 4/4")
+    step.parse_dsl()
+    audio = _voice_audio(step.steps[0], library, 44100, {})
+    assert audio is not None
+    # the constant-0.5 sample is flat; a synth kick is not
+    assert np.allclose(audio, 0.5)
+
+
+def test_voice_audio_returns_none_for_unknown(tmp_path: Path):
+    library = SampleLibrary(tmp_path)
+    step = Pattern(name="x", dsl="zonk 4/4")
+    step.parse_dsl()
+    assert _voice_audio(step.steps[0], library, 44100, {}) is None
+
+
+def test_synth_cache_reused(tmp_path: Path):
+    library = SampleLibrary(tmp_path)
+    pat = Pattern(name="h", dsl="hh 16x8")
+    pat.parse_dsl()
+    cache: dict[str, np.ndarray] = {}
+    first = _voice_audio(pat.steps[0], library, 44100, cache)
+    assert len(cache) == 1  # one entry for the single voice/tune
+    second = _voice_audio(pat.steps[1], library, 44100, cache)
+    # same cached object reused for the same voice/tune
+    assert first is second
+    assert len(cache) == 1
+
+
+def test_gain_db_modifier_attenuates_output(tmp_path: Path):
+    plain = _render("kick 4/4", tmp_path, name="plain")
+    quiet = _render("kick 4/4 | gain -6db", tmp_path, name="quiet")
+    plain_peak = float(np.max(np.abs(plain)))
+    quiet_peak = float(np.max(np.abs(quiet)))
+    # -6 dB is about 0.501x amplitude; must be clearly quieter, not identical.
+    assert quiet_peak == 0.0 or plain_peak > 0.0
+    assert quiet_peak < plain_peak * 0.6
+
+
+def test_pan_hard_left_silences_right_channel(tmp_path: Path):
+    data = _render("kick 4/4 | pan L100", tmp_path, name="left")
+    left_peak = float(np.max(np.abs(data[:, 0])))
+    right_peak = float(np.max(np.abs(data[:, 1])))
+    assert left_peak > 0.1
+    assert right_peak < 1e-4
+
+
+def test_pan_centre_leaves_channels_equal(tmp_path: Path):
+    data = _render("kick 4/4 | pan 0", tmp_path, name="centre")
+    assert np.allclose(data[:, 0], data[:, 1])
+
+
+def test_tune_repitches_real_samples(tmp_path: Path):
+    # A real sample must respond to `| tune` (vari-speed), not ignore it.
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    tone = np.sin(2 * np.pi * 220 * np.linspace(0, 1, 4410, endpoint=False))
+    sf.write(samples / "kick.wav", (0.5 * tone).astype(np.float32), 44100)
+    library = SampleLibrary(samples)
+    library.build_index(recursive=False)
+
+    def audio(dsl: str) -> np.ndarray:
+        pat = Pattern(name="k", dsl=dsl)
+        pat.parse_dsl()
+        out = _voice_audio(pat.steps[0], library, 44100, {})
+        assert out is not None
+        return out
+
+    base = audio("kick 4/4")
+    up_octave = audio("kick 4/4 | tune 12st")
+    down_octave = audio("kick 4/4 | tune -12st")
+    # +12 semitones plays twice as fast (half the frames); -12 doubles them.
+    assert abs(len(up_octave) - len(base) / 2) <= 2
+    assert abs(len(down_octave) - len(base) * 2) <= 2

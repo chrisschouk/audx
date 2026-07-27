@@ -41,8 +41,12 @@ class Mixer:
         Returns float32 interleaved array.
         """
         mixed = np.zeros(frames * 2, dtype=np.float32)  # stereo interleaved
+        # If any channel is soloed, only soloed channels are audible.
+        solo_active = any(ch.solo for ch in self.channels)
         for ch in self.channels:
             if ch.mute:
+                continue
+            if solo_active and not ch.solo:
                 continue
             ch.remove_finished()
             for voice in ch._voices:

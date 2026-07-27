@@ -1,3 +1,5 @@
+<div align="center">
+
 # audx
 
 A terminal-native digital audio workstation for pattern sequencing, live-coded sample playback, and Ableton session export. Built for a calm, local, hackable workflow with zero cloud dependency.
@@ -123,13 +125,13 @@ audx pattern create clap "clap [1.0.1.0.1.1.0.0]"            # explicit grid
 make dev
 uv run pytest -q
 uv run ruff check src tests
-uv run mypy src/audx
+uv run mypy src/audx             # clean across the whole package
 ```
 
 ---
 
 ## 💡 Philosophy
 
-Code is the controller. Sound is the canvas. Terminal is the dimension.
+> Code is the controller. Sound is the canvas. Terminal is the dimension.
 
 Can Chris open a terminal, hit play, and feel like he is controlling a musical instrument rather than debugging Python? Yes.

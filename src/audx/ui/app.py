@@ -16,6 +16,43 @@ from audx.engine import get_engine, init_engine
 from audx.pattern import get_pattern_engine
 from audx.project import Project
 
+# ── Live finger-drumming pads ─────────────────────────────────────────────────
+#
+# Map a keyboard key → (synth voice name, mixer channel). While the TUI is open
+# the user can play these built-in synth voices live, like a drum-pad MPC row.
+#
+# The digit keys 1-9 are already bound (channel mute toggles) and `q`/`t`/`m`
+# are bound to quit/tap/mute, so the pads deliberately use a fresh QWERTY-style
+# pad block that avoids every existing binding:
+#
+#     w  e  r        kick  snare  clap        (ch 0  1  2)
+#     a  s  d  f     hh    oh     rim   tom    (ch 3  4  5  6)
+#     z  x  c        cowbell perc  sub          (ch 7  8  9)
+#     u  i  o        ride   crash  shaker       (ch 10 11 12)
+#
+# Each value is (voice_name, channel). Keep this a plain module-level dict so it
+# can be unit-tested without instantiating the Textual app.
+SYNTH_PADS: dict[str, tuple[str, int]] = {
+    "w": ("kick", 0),
+    "e": ("snare", 1),
+    "r": ("clap", 2),
+    "a": ("hh", 3),
+    "s": ("oh", 4),
+    "d": ("rim", 5),
+    "f": ("tom", 6),
+    "z": ("cowbell", 7),
+    "x": ("perc", 8),
+    "c": ("sub", 9),
+    "u": ("ride", 10),
+    "i": ("crash", 11),
+    "o": ("shaker", 12),
+}
+
+
+def pad_for_key(key: str) -> tuple[str, int] | None:
+    """Return the ``(voice, channel)`` pad for ``key``, or ``None`` if unmapped."""
+    return SYNTH_PADS.get(key)
+
 
 class VUMeter(Static):
     """Small text VU meter."""
@@ -355,6 +392,17 @@ class DAWApp(App):
     def update_meters(self) -> None:
         for widget_id in ("#transport-header", "#mixer-table", "#pattern-grid", "#command-line", "#status"):
             self.query_one(widget_id, Static).refresh()
+
+    def _trigger_pad(self, key: str) -> bool:
+        """Play the live synth pad bound to ``key``. Returns True if consumed."""
+        pad = pad_for_key(key)
+        if pad is None:
+            return False
+        voice, channel = pad
+        engine = get_engine() or init_engine()
+        if engine is not None:
+            engine.play_synth(voice, channel)
+        return True
 
     def on_key(self, event) -> None:
         """Modal keymap per spec §04 (NORMAL mode keys)."""

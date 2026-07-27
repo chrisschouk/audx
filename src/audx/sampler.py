@@ -22,6 +22,18 @@ def get_sample_library() -> SampleLibrary:
     return _global_library
 
 
+def set_sample_library_root(root: Path | str) -> SampleLibrary:
+    """Point the process-global sample library at ``root``.
+
+    Used by ``audx launch/open --samples DIR`` so the TUI's audio engine, which
+    resolves samples through :func:`get_sample_library`, actually reads from the
+    directory the user asked for instead of the default location.
+    """
+    global _global_library
+    _global_library = SampleLibrary(root)
+    return _global_library
+
+
 class SampleLibrary:
     """Tiny file-backed sample index.
 

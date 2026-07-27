@@ -2,10 +2,16 @@
 audx — Core audio engine.
 
 Handles:
-- Audio backend (sounddevice / CoreAudio)
+- Audio backend (sounddevice / CoreAudio), imported lazily
 - Sample playback voices (memory-mapped WAV/FLAC/MP3)
+- Built-in synth voices (procedural, no samples required)
 - Mix bus (16 channels)
 - Real-time thread with low-latency callback
+
+The real-time backend (``sounddevice`` → PortAudio) is imported lazily inside
+:meth:`AudioEngine.start`, so importing this module — and everything that builds
+on it, including the whole CLI — works on machines without the PortAudio system
+library. Offline features (render, export, demo, diff) never touch the backend.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from audx.sampler import get_sample_library
 
 class AudioEngine:
     """Main audio engine — runs a real-time audio callback."""
+
     def __init__(self, sample_rate: int = 48000, buffer_size: int = 256):
         self.sample_rate = sample_rate
         self.buffer_size = buffer_size
@@ -36,12 +43,25 @@ class AudioEngine:
         self.channel_mute = np.zeros(self.channels, dtype=bool)
         self.channel_gain = np.ones(self.channels, dtype=np.float32)
         self.master_level = 1.0
+        self.bpm = 128.0
         self.scheduler_callback = None
         self.active_voices: list[Voice] = []
         self.pattern_engine = get_pattern_engine()
         self.sample_library = get_sample_library()
-        # BPM set from config at runtime  # default, will be set from config
+        self._synth_cache: dict[str, np.ndarray] = {}
 
+    @staticmethod
+    def _backend() -> Any:
+        """Import the sounddevice backend lazily with a friendly error."""
+        try:
+            import sounddevice as sd
+        except OSError as exc:  # PortAudio missing
+            raise RuntimeError(
+                "Real-time audio needs the PortAudio library. Install it "
+                "(macOS: `brew install portaudio`, Debian/Ubuntu: "
+                "`apt install libportaudio2`) — offline render/export still work without it."
+            ) from exc
+        return sd
 
     def start(self) -> None:
         if self.stream and self.stream.active:
@@ -110,7 +130,9 @@ class AudioEngine:
                     alive.append(voice)
             self.active_voices = alive
             for ch in range(self.channels):
-                self.channel_levels[ch] = np.sqrt(np.mean(self.mix_buffer[ch]**2)) if frames > 0 else 0.0
+                self.channel_levels[ch] = (
+                    float(np.sqrt(np.mean(self.mix_buffer[ch] ** 2))) if frames > 0 else 0.0
+                )
         mono = np.sum(self.mix_buffer, axis=0) * self.master_level
         outdata[:, 0] = mono * 0.7
         outdata[:, 1] = mono * 0.7
@@ -145,11 +167,13 @@ class AudioEngine:
 
     def set_channel_gain(self, channel: int, gain: float) -> None:
         with self.lock:
-            self.channel_gain[channel] = np.clip(gain, 0.0, 2.0)
+            voice = SynthVoice(buffer, channel, volume, pan)
+            self.active_voices.append(voice)
+        return voice
 
     def set_channel_pan(self, channel: int, pan: float) -> None:
         with self.lock:
-            self.channel_pan[channel] = np.clip(pan, -1, 1)
+            self.channel_gain[channel] = float(np.clip(gain, 0.0, 2.0))
 
     def set_channel_mute(self, channel: int, mute: bool) -> None:
         with self.lock:
@@ -157,7 +181,7 @@ class AudioEngine:
 
     def set_master(self, level: float) -> None:
         with self.lock:
-            self.master_level = np.clip(level, 0.0, 2.0)
+            self.channel_pan[channel] = float(np.clip(pan, -1, 1))
 
     def set_bpm(self, bpm: float) -> None:
         with self.lock:
@@ -243,11 +267,12 @@ _engine: AudioEngine | None = None
 def get_engine() -> AudioEngine | None:
     return _engine
 
-def init_engine(sample_rate=None, buffer_size=None) -> AudioEngine:
+
+def init_engine(sample_rate: int | None = None, buffer_size: int | None = None) -> AudioEngine:
     global _engine
     if _engine is None:
         from audx.config import AUDX_BPM
-        # Use defaults if not provided
+
         sr = sample_rate or 48000
         bs = buffer_size or 256
         _engine = AudioEngine(sr, bs)
