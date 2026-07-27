@@ -118,10 +118,18 @@ def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channe
 
 
 class Push2DisplayDriver:
-    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen."""
+    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen.
 
-    VENDOR_ID = 0x2972
-    PRODUCT_ID = 0x0001
+    Ableton Push 2 USB Hardware Specs:
+    - Vendor ID: 0x2982 (Ableton AG)
+    - Product ID: 0x1967 (Push 2)
+    - Interface 0: Push 2 Display (Bulk Endpoint 0x01 OUT)
+    - Resolution: 960x160 pixels (2048-byte stride per line)
+    - Protocol: 16-byte header + 327,680 byte payload (BGR565 XOR 0xE73C)
+    """
+
+    VENDOR_ID = 0x2982
+    PRODUCT_ID = 0x1967
     ENDPOINT_OUT = 0x01
 
     def __init__(self) -> None:

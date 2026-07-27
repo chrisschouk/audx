@@ -211,11 +211,35 @@ def jam_command(
     for p in patterns:
         console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
 
-    from audx.push2 import find_push2_input, find_push2_output, light_push2_pads
+    from audx.push2 import (
+        Push2DisplayDriver,
+        find_push2_input,
+        find_push2_output,
+        light_push2_pads,
+        render_push2_display_frame,
+    )
 
     push_out = find_push2_output()
     if push_out:
         light_push2_pads(push_out)
+
+    push2_disp = Push2DisplayDriver()
+    if push2_disp.is_connected:
+        import threading
+
+        def _push2_display_loop() -> None:
+            while True:
+                try:
+                    eng = get_engine()
+                    ch_levels = list(eng.get_channel_levels()) if eng else [0.5, 0.5, 0.5, 0.5]
+                    frame = render_push2_display_frame(bpm=effective_bpm, genre=selected_genre.value.upper(), channel_levels=ch_levels)
+                    push2_disp.send_frame(frame)
+                except Exception:
+                    pass
+                time.sleep(0.1)
+
+        dt = threading.Thread(target=_push2_display_loop, daemon=True)
+        dt.start()
 
     push_in_name = find_push2_input()
     active_hits: dict[str, float] = {}
