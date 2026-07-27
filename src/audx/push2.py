@@ -1,12 +1,15 @@
-"""Push 2 MIDI mapping, pad lighting, USB display driver, and device detection.
+"""Push 2 MIDI mapping, pad lighting, USB display driver, direct USB MIDI reader, and device detection.
 
 Full implementation of Ableton Push 2 hardware protocol:
-- MIDI Control: 8x8 Pad Grid, Encoders 1-8 (CC 71-78), Tempo (CC 14), Swing (CC 15), Transport (Notes 85, 86, 87), Track Select (Notes 102-109), Mute (Notes 20-27).
-- Onboard LCD Screen: 960x160 BGR565 XOR 0xE73C frame buffer over USB Bulk Endpoint 0x01 (Vendor ID 0x2982, Product ID 0x1967).
+- Direct USB MIDI: Reads raw 4-byte USB MIDI packets directly from Bulk Endpoint 0x82 (bypassing OS MIDI stack).
+- Display Driver: 960x160 BGR565 XOR 0xE73C frame buffer over USB Bulk Endpoint 0x01 (Vendor ID 0x2982, Product ID 0x1967).
 """
 
 from __future__ import annotations
 
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -87,41 +90,39 @@ def light_push2_pads(port_name: str | None = None) -> bool:
         return False
 
 
-def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channel_levels: list[float] | None = None, channel_gains: list[float] | None = None) -> bytes:
-    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen.
-
-    Uses high-contrast BGR565 color blocks and level meter graphics.
-    """
+def render_push2_display_frame(
+    bpm: float = 128.0,
+    genre: str = "TECHNO",
+    channel_levels: list[float] | None = None,
+    channel_gains: list[float] | None = None,
+) -> bytes:
+    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen."""
     header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-
-    # 160 lines x 1024 uint16 words (960 active pixels + 64 padding words)
     words = np.zeros((160, 1024), dtype=np.uint16)
 
-    # Dark Slate Background (BGR565: B=15, G=8, R=5)
+    # Background (BGR565)
     bg_color = (15 & 0x1F) | ((8 & 0x3F) << 5) | ((5 & 0x1F) << 11)
     words[:, :960] = bg_color
 
-    # Top Banner Header (px 0..32) - Vibrant Cyan/Teal
+    # Top Banner Header (px 0..32)
     header_color = (31 & 0x1F) | ((40 & 0x3F) << 5) | ((5 & 0x1F) << 11)
     words[0:32, :960] = header_color
 
-    # White Title Accent Block on Top Left (px 4..28, cols 20..180)
-    white_pixel = 0xFFFF
-    words[4:28, 20:180] = white_pixel
+    # Title Box
+    words[4:28, 20:180] = 0xFFFF
 
-    # Genre Badge (px 6..26, cols 750..920) - Bright Yellow
+    # Genre Badge
     yellow_pixel = (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11)
     words[6:26, 750:920] = yellow_pixel
 
-    # Render 4 Channel Strip Cards corresponding to Push 2 Encoders 1..4
     levels = channel_levels or [0.7, 0.5, 0.4, 0.8]
     gains = channel_gains or [1.0, 1.0, 1.0, 1.0]
 
     ch_colors = [
-        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),   # Green (Ch 1)
-        (31 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),  # Cyan (Ch 2)
-        (31 & 0x1F) | ((0 & 0x3F) << 5) | ((31 & 0x1F) << 11),  # Magenta (Ch 3)
-        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11),  # Yellow (Ch 4)
+        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),
+        (31 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),
+        (31 & 0x1F) | ((0 & 0x3F) << 5) | ((31 & 0x1F) << 11),
+        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11),
     ]
 
     for i in range(min(4, len(levels))):
@@ -129,46 +130,28 @@ def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channe
         col_end = col_start + 200
         val = max(0.0, min(1.0, levels[i]))
 
-        # Channel Header Card (px 40..70)
-        card_header_color = (25 & 0x1F) | ((25 & 0x3F) << 5) | ((25 & 0x1F) << 11)
-        words[40:70, col_start:col_end] = card_header_color
-
-        # Channel Accent Indicator Box (px 44..66, cols col_start+10 .. col_start+40)
+        words[40:70, col_start:col_end] = (25 & 0x1F) | ((25 & 0x3F) << 5) | ((25 & 0x1F) << 11)
         words[44:66, col_start + 10 : col_start + 40] = ch_colors[i]
 
-        # Level Meter Background (px 80..150, cols col_start+10..col_start+60)
         meter_bg = (10 & 0x1F) | ((5 & 0x3F) << 5) | ((3 & 0x1F) << 11)
         words[80:150, col_start + 10 : col_start + 60] = meter_bg
 
-        # Active Level Meter Fill
         meter_h = int(70 * val)
         if meter_h > 0:
             words[150 - meter_h : 150, col_start + 10 : col_start + 60] = ch_colors[i]
 
-        # Gain Knob Level Fill (px 80..150, cols col_start+80..col_start+180)
         gain_val = max(0.0, min(2.0, gains[i])) / 2.0
         gain_h = int(70 * gain_val)
         words[80:150, col_start + 80 : col_start + 180] = (20 & 0x1F) | ((20 & 0x3F) << 5) | ((20 & 0x1F) << 11)
         if gain_h > 0:
             words[150 - gain_h : 150, col_start + 80 : col_start + 180] = ch_colors[i]
 
-    # CRITICAL: Ableton Push 2 Hardware Display Scrambling XOR Mask: 0xE73C
+    # Hardware XOR Scrambling Mask: 0xE73C
     words ^= 0xE73C
-
     return bytes(header + words.tobytes())
 
 
 class Push2DisplayDriver:
-    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen.
-
-    Ableton Push 2 USB Hardware Specs:
-    - Vendor ID: 0x2982 (Ableton AG)
-    - Product ID: 0x1967 (Push 2)
-    - Interface 0: Push 2 Display (Bulk Endpoint 0x01 OUT)
-    - Resolution: 960x160 pixels (2048-byte stride per line)
-    - Protocol: 16-byte header + 327,680 byte payload (BGR565 XOR 0xE73C)
-    """
-
     VENDOR_ID = 0x2982
     PRODUCT_ID = 0x1967
     ENDPOINT_OUT = 0x01
@@ -217,3 +200,64 @@ class Push2DisplayDriver:
         except Exception:
             self._connected = False
             return False
+
+
+class Push2UsbMidi:
+    """Direct USB Bulk Endpoint 0x82 MIDI Listener for Push 2 on macOS."""
+
+    VENDOR_ID = 0x2982
+    PRODUCT_ID = 0x1967
+    ENDPOINT_IN = 0x82
+
+    def __init__(self, callback: Callable[[str, int, int, int], None]):
+        self.callback = callback
+        self.running = False
+        self.thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self.running = True
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.running = False
+
+    def _worker(self) -> None:
+        try:
+            import usb.core
+            import usb.util
+
+            dev = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
+            if dev is None:
+                return
+            try:
+                if dev.is_kernel_driver_active(2):
+                    dev.detach_kernel_driver(2)
+            except Exception:
+                pass
+            try:
+                usb.util.claim_interface(dev, 2)
+            except Exception:
+                pass
+
+            while self.running:
+                try:
+                    data = dev.read(self.ENDPOINT_IN, 64, timeout=200)
+                    if data and len(data) >= 4:
+                        for i in range(0, len(data), 4):
+                            packet = data[i : i + 4]
+                            if len(packet) == 4:
+                                _header, status, d1, d2 = packet
+                                msg_type = status & 0xF0
+                                ch = status & 0x0F
+                                if msg_type == 0x90 and d2 > 0:
+                                    self.callback("note_on", d1, d2, ch)
+                                elif msg_type == 0x80 or (msg_type == 0x90 and d2 == 0):
+                                    self.callback("note_off", d1, d2, ch)
+                                elif msg_type == 0xB0:
+                                    self.callback("control_change", d1, d2, ch)
+                except Exception:
+                    pass
+                time.sleep(0.005)
+        except Exception:
+            pass

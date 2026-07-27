@@ -46,17 +46,31 @@ If no sample files are found on your hard drive, `audx` automatically uses built
 
 ---
 
-## 🎛 Push 2 LED Lighting Grid & Mapping
+## 🎛 Push 2 Hardware Integration (Direct USB & Display)
 
-`audx` includes native Push 2 pad LED lighting grid diagnostics:
+`audx` features direct USB driver integration for Ableton Push 2 on macOS and Linux:
+
+- **Direct USB Bulk MIDI (Endpoint `0x82`)**: Reads 4-byte raw USB MIDI packets directly from Push 2's hardware USB interface, bypassing OS MIDI server locks or driver limitations.
+- **Hardware LCD Color Screen (Endpoint `0x01`)**: Renders 960x160 color graphics (BGR565 XOR `0xE73C`) directly onto Push 2's physical display screen.
 
 ```bash
-# Test Push 2 8x8 pad lighting grid
+# 1. Run live jam with full USB hardware access
+sudo .venv/bin/audx jam --genre house
+
+# 2. Test hardware LCD color screen rendering
+sudo .venv/bin/audx push2 display
+
+# 3. Test Push 2 8x8 pad lighting grid
 audx push2 lights
 
-# Display Push 2 control mapping matrix
+# 4. Display Push 2 control mapping matrix
 audx push2 map
 ```
+
+> [!IMPORTANT]
+> **Push 2 Hardware Requirements**:
+> - **12V DC Wall Power Adapter**: The color LCD display screen and full pad brightness require the Push 2 12V wall power supply to be connected. (On USB bus power alone, the LCD display backlight remains dark).
+> - **User Mode**: If Ableton Live was open, press the **User** button (top-right of Push 2 hardware) or run with `sudo` to claim raw USB interfaces 0 and 2.
 
 ---
 

@@ -215,7 +215,6 @@ def jam_command(
     for p in patterns:
         console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
 
-    from audx.midi import list_inputs
     from audx.push2 import (
         Push2DisplayDriver,
         find_push2_input,
@@ -326,22 +325,49 @@ def jam_command(
         except Exception:
             pass
 
-    import threading
+    from audx.push2 import Push2UsbMidi
 
-    def _auto_reconnect_midi() -> None:
-        connected_port: str | None = None
-        while True:
-            try:
-                current = find_push2_input() or (list_inputs()[0] if list_inputs() else None)
-                if current and current != connected_port:
-                    connected_port = current
-                    t = threading.Thread(target=_midi_input_worker, args=(current,), daemon=True)
-                    t.start()
-            except Exception:
-                pass
-            time.sleep(1.0)
+    def _usb_midi_callback(msg_type: str, d1: int, d2: int, ch: int) -> None:
+        if msg_type == "note_on" and d2 > 0:
+            if 0 <= d1 <= 11:
+                return
+            if d1 == 85:
+                get_pattern_engine().start()
+                return
+            elif d1 == 86:
+                get_pattern_engine().stop()
+                return
+            elif 20 <= d1 <= 27:
+                ch_idx = d1 - 20
+                eng = get_engine()
+                if eng and ch_idx < eng.channels:
+                    eng.set_channel_mute(ch_idx, not eng.channel_mute[ch_idx])
+                return
 
-    threading.Thread(target=_auto_reconnect_midi, daemon=True).start()
+            sample_name, channel = _get_midi_note_sample(d1)
+            _trigger_pad_hit(sample_name, channel, d2, source="Push 2 Direct USB")
+        elif msg_type == "control_change":
+            if 71 <= d1 <= 74:
+                ch_idx = d1 - 71
+                delta = 0.05 if d2 < 64 else -0.05
+                eng = get_engine()
+                if eng and ch_idx < eng.channels:
+                    cur = float(eng.channel_gain[ch_idx])
+                    eng.set_channel_gain(ch_idx, max(0.0, min(2.0, cur + delta)))
+            elif 75 <= d1 <= 78:
+                ch_idx = d1 - 75
+                delta = 0.05 if d2 < 64 else -0.05
+                eng = get_engine()
+                if eng and ch_idx < eng.channels:
+                    cur_pan = float(eng.channel_pan[ch_idx])
+                    eng.set_channel_pan(ch_idx, max(-1.0, min(1.0, cur_pan + delta)))
+            elif d1 == 14:
+                delta_bpm = 1.0 if d2 < 64 else -1.0
+                cur_bpm = get_pattern_engine().bpm
+                get_pattern_engine().set_bpm(max(40.0, min(240.0, cur_bpm + delta_bpm)))
+
+    usb_midi_listener = Push2UsbMidi(_usb_midi_callback)
+    usb_midi_listener.start()
 
     try:
         eng = init_engine()
