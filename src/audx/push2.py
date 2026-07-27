@@ -1,8 +1,9 @@
-"""Push 2 MIDI mapping, pad lighting, and device detection."""
+"""Push 2 MIDI mapping, pad lighting, USB display driver, and device detection."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import mido
 
@@ -69,3 +70,56 @@ def light_push2_pads(port_name: str | None = None) -> bool:
         return True
     except Exception:
         return False
+
+
+class Push2DisplayDriver:
+    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen.
+
+    Push 2 display hardware expects 960x160 RGB565 frames with 2048-byte stride
+    transferred via USB Bulk endpoint 0x01 (Vendor ID 0x2972, Product ID 0x0001).
+    """
+
+    VENDOR_ID = 0x2972
+    PRODUCT_ID = 0x0001
+    ENDPOINT_OUT = 0x01
+
+    def __init__(self) -> None:
+        self.device: Any | None = None
+        self._connected = False
+        self._init_usb()
+
+    def _init_usb(self) -> bool:
+        try:
+            import usb.core
+
+            self.device = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
+            if self.device is not None:
+                try:
+                    self.device.set_configuration()
+                except Exception:
+                    pass
+                self._connected = True
+                return True
+        except Exception:
+            pass
+        self._connected = False
+        return False
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    def send_frame(self, frame_bytes: bytes) -> bool:
+        if self.device is None:
+            if not self._init_usb():
+                return False
+        if self.device is None:
+            return False
+        try:
+            # Push 2 USB 16-byte frame header
+            header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            self.device.write(self.ENDPOINT_OUT, header + frame_bytes, timeout=1000)
+            return True
+        except Exception:
+            self._connected = False
+            return False
