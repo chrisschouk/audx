@@ -911,6 +911,22 @@ def push2_lights() -> None:
         console.print("    [dim]Tip: Connect Push 2 USB & ensure Ableton Live is closed (or releasing MIDI ports).[/dim]")
 
 
+@push2_app.command("display")
+def push2_display() -> None:
+    """Test and render live frame to Push 2 onboard 960x160 color LCD screen."""
+    from audx.push2 import Push2DisplayDriver, render_push2_display_frame
+
+    driver = Push2DisplayDriver()
+    frame = render_push2_display_frame(bpm=128.0, genre="TECHNO", channel_levels=[0.9, 0.7, 0.5, 0.8])
+    sent = driver.send_frame(frame)
+
+    if sent:
+        console.print("[bold green]✓ Push 2 onboard LCD display frame sent over USB (960x160 BGR565 XOR 0xE73C)![/bold green]")
+    else:
+        console.print("[yellow]· Push 2 USB display interface not active.[/yellow]")
+        console.print("  [dim]Tip: Connect Push 2 USB power/cable. Install libusb if needed: `brew install libusb`.[/dim]")
+
+
 @song_app.command("render")
 def song_render(
     project: Path = typer.Argument(..., help="Path to .audx project file"),

@@ -1,4 +1,11 @@
-"""Push 2 MIDI mapping, pad lighting, USB display driver, and device detection."""
+"""Push 2 MIDI mapping, pad lighting, USB display driver, and device detection.
+
+Includes full implementation of the Ableton Push 2 display protocol:
+- Resolution: 960x160 pixels
+- Stride: 2048 bytes / 1024 words per line (960 active pixels + 64 padding words)
+- Pixel format: BGR565 XORed with Ableton's hardware scrambling mask 0xE73C
+- USB Transfer: 16-byte header + 327,680 byte payload to Bulk Endpoint 0x01
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import mido
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -62,9 +70,7 @@ def light_push2_pads(port_name: str | None = None) -> bool:
 
     try:
         with mido.open_output(target_port) as port:
-            # Push 2 pads 36..99 (8x8 grid)
             for note in range(36, 100):
-                # Cycle pad colors (12=green, 45=blue, 127=red, 21=cyan)
                 color = 12 if note % 4 == 0 else (45 if note % 4 == 1 else (127 if note % 4 == 2 else 21))
                 port.send(mido.Message("note_on", note=note, velocity=color, channel=0))
         return True
@@ -72,12 +78,47 @@ def light_push2_pads(port_name: str | None = None) -> bool:
         return False
 
 
-class Push2DisplayDriver:
-    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen.
+def render_push2_display_frame(bpm: float = 128.0, genre: str = "TECHNO", channel_levels: list[float] | None = None) -> bytes:
+    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen."""
+    # 16-byte Ableton Push 2 display header
+    header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
-    Push 2 display hardware expects 960x160 RGB565 frames with 2048-byte stride
-    transferred via USB Bulk endpoint 0x01 (Vendor ID 0x2972, Product ID 0x0001).
-    """
+    # 160 lines x 1024 uint16 words (960 active pixels + 64 padding words)
+    words = np.zeros((160, 1024), dtype=np.uint16)
+
+    # Dark cyan/navy background (BGR565: Blue=20, Green=10, Red=5)
+    bg_color = (20 & 0x1F) | ((10 & 0x3F) << 5) | ((5 & 0x1F) << 11)
+    words[:, :960] = bg_color
+
+    # Top Header Bar (0..32 px) - Magenta/Teal accent
+    header_color = (15 & 0x1F) | ((45 & 0x3F) << 5) | ((25 & 0x1F) << 11)
+    words[0:32, :960] = header_color
+
+    # Draw 4 Channel Strips (columns 0..4)
+    levels = channel_levels or [0.8, 0.6, 0.4, 0.9]
+    for i in range(min(4, len(levels))):
+        col_start = 40 + i * 220
+        col_end = col_start + 180
+        val = levels[i]
+
+        # Channel header box (px 40..65)
+        ch_box_color = (28 & 0x1F) | ((20 & 0x3F) << 5) | ((10 & 0x1F) << 11)
+        words[40:65, col_start:col_end] = ch_box_color
+
+        # Level meter bar (px 75..145)
+        meter_height = int(70 * val)
+        if meter_height > 0:
+            meter_color = (5 & 0x1F) | ((60 & 0x3F) << 5) | ((10 & 0x1F) << 11)
+            words[145 - meter_height : 145, col_start : col_start + 40] = meter_color
+
+    # CRITICAL: Ableton Push 2 Hardware Display Scrambling XOR Mask: 0xE73C
+    words ^= 0xE73C
+
+    return bytes(header + words.tobytes())
+
+
+class Push2DisplayDriver:
+    """USB Bulk Display Driver for Ableton Push 2 onboard 960x160 color LCD screen."""
 
     VENDOR_ID = 0x2972
     PRODUCT_ID = 0x0001
@@ -91,9 +132,15 @@ class Push2DisplayDriver:
     def _init_usb(self) -> bool:
         try:
             import usb.core
+            import usb.util
 
             self.device = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
             if self.device is not None:
+                try:
+                    if self.device.is_kernel_driver_active(0):
+                        self.device.detach_kernel_driver(0)
+                except Exception:
+                    pass
                 try:
                     self.device.set_configuration()
                 except Exception:
@@ -116,9 +163,7 @@ class Push2DisplayDriver:
         if self.device is None:
             return False
         try:
-            # Push 2 USB 16-byte frame header
-            header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-            self.device.write(self.ENDPOINT_OUT, header + frame_bytes, timeout=1000)
+            self.device.write(self.ENDPOINT_OUT, frame_bytes, timeout=1000)
             return True
         except Exception:
             self._connected = False
