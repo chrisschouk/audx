@@ -215,14 +215,32 @@ def jam_command(
 
     push_out = find_push2_output()
     if push_out:
-        if light_push2_pads(push_out):
-            console.print(f"  [bold green]✓ Push 2 pad LEDs illuminated on '{push_out}'[/bold green]")
+        light_push2_pads(push_out)
 
     push_in_name = find_push2_input()
+    active_hits: dict[str, float] = {}
+
+    def _get_midi_note_sample(note: int) -> tuple[str, int]:
+        if note in (35, 36):
+            return ("kick", 0)
+        elif note in (37, 38, 40):
+            return ("snare", 1)
+        elif note in (42, 44, 46):
+            return ("hh", 2)
+        elif note == 39:
+            return ("clap", 1)
+        elif note in (41, 43, 45, 47, 48):
+            return ("perc", 3)
+        elif note in (49, 51, 52):
+            return ("crash", 2)
+        else:
+            notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+            octave = (note // 12) - 1
+            note_name = notes[note % 12]
+            return (f"{note_name}{octave}", 3)
+
     if push_in_name:
         import threading
-
-        console.print(f"  [bold green]✓ Listening for Push 2 pad hits on '{push_in_name}'[/bold green]")
 
         def _push2_listener() -> None:
             try:
@@ -231,18 +249,13 @@ def jam_command(
                 with mido.open_input(push_in_name) as port:
                     for msg in port:
                         if msg.type == "note_on" and msg.velocity > 0:
-                            note_map = {
-                                36: ("kick", 0),
-                                37: ("snare", 1),
-                                38: ("hh", 2),
-                                39: ("clap", 1),
-                                40: ("perc", 3),
-                            }
-                            sample_name, ch = note_map.get(msg.note, (f"C{2 + (msg.note % 12)//3}", 3))
+                            sample_name, ch = _get_midi_note_sample(msg.note)
+                            # Loud, punchy velocity curve (0.6..1.0 gain)
+                            scaled_gain = 0.6 + 0.4 * (msg.velocity / 127.0)
                             eng = get_engine()
                             if eng:
-                                eng.trigger_hit(sample_name, channel=ch, velocity=msg.velocity / 127.0)
-                            console.print(f"  [bold cyan]⚡ Push 2 Pad Hit![/bold cyan] note={msg.note} ([yellow]{sample_name}[/yellow]) vel={msg.velocity}")
+                                eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
+                            active_hits[sample_name] = time.time()
             except Exception:
                 pass
 
@@ -254,7 +267,7 @@ def jam_command(
         get_pattern_engine().start()
         eng.start()
     except Exception as exc:
-        console.print(f"[yellow]Audio stream notice (synthetic fallback active): {exc}[/yellow]")
+        console.print(f"[yellow]Audio stream notice: {exc}[/yellow]")
 
     if once:
         time.sleep(0.2)
@@ -265,9 +278,35 @@ def jam_command(
         console.print("[dim]Jam loop complete.[/dim]")
         return
 
+    from rich.live import Live
+    from rich.table import Table
+
+    def _render_jam_dashboard() -> Panel:
+        now = time.time()
+        table = Table(show_header=True, header_style="bold magenta", expand=True)
+        table.add_column("Track", style="cyan", width=12)
+        table.add_column("Pad Hit", width=10)
+        table.add_column("DSL Pattern", style="dim")
+
+        for p in patterns:
+            last_hit = active_hits.get(p.name, 0)
+            hit_active = (now - last_hit) < 0.25
+            hit_badge = "[bold black on bright_green] ⚡ HIT! [/bold black on bright_green]" if hit_active else "[dim]· idle[/dim]"
+            table.add_row(p.name, hit_badge, p.dsl)
+
+        push_status = f"[bold green]✓ '{push_in_name}' active[/bold green]" if push_in_name else "[yellow]· No Push 2 detected[/yellow]"
+        body = Table.grid(padding=1)
+        body.add_row(f"BPM: [cyan]{effective_bpm:.1f}[/cyan]  |  Genre: [magenta]{selected_genre.value.upper()}[/magenta]  |  Push 2: {push_status}")
+        body.add_row(table)
+        body.add_row("[dim]Press Ctrl-C to stop jamming.[/dim]")
+
+        return Panel(body, title="🎵 audx live jam session & pad grid", border_style="green")
+
     try:
-        while True:
-            time.sleep(0.25)
+        with Live(_render_jam_dashboard(), refresh_per_second=10, console=console) as live:
+            while True:
+                time.sleep(0.1)
+                live.update(_render_jam_dashboard())
     except KeyboardInterrupt:
         active_engine = get_engine()
         if active_engine is not None:

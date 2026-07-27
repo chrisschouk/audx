@@ -70,6 +70,10 @@ def generate_synthetic_sample(name: str, sr: int = 48000) -> np.ndarray:
     tone = np.sin(2.0 * np.pi * freq * t) + 0.3 * np.sin(4.0 * np.pi * freq * t)
     envelope = np.exp(-6.0 * t)
     signal = tone * envelope * 0.4
+    # Peak normalize signal for crisp, punchy audio
+    max_val = float(np.max(np.abs(signal)))
+    if max_val > 0.001:
+        signal = (signal / max_val) * 0.85
     return cast(np.ndarray, signal.astype(np.float32))
 
 
