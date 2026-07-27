@@ -192,9 +192,7 @@ class SampleVoice(Voice):
             self.data = cast(np.ndarray, self.data.astype(np.float32))
             self.position = self.start_frame
             self.length = len(self.data)
-            print(f"  ▶ Playing {sample_path.split('/')[-1]} on ch{channel+1}")
-        except Exception as e:
-            print(f"  ✗ Failed to load sample: {e}")
+        except Exception:
             self.is_active = False
             self.data = np.zeros(1, dtype=np.float32)
 
