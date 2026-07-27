@@ -251,11 +251,11 @@ def jam_command(
         elif note in (37, 38, 40):
             return ("snare", 1)
         elif note in (42, 44, 46):
-            return ("hh", 2)
+            return ("hats", 2)
         elif note == 39:
             return ("clap", 1)
         elif note in (41, 43, 45, 47, 48):
-            return ("perc", 3)
+            return ("bass", 3)
         elif note in (49, 51, 52):
             return ("crash", 2)
         else:
@@ -263,6 +263,8 @@ def jam_command(
             octave = (note // 12) - 1
             note_name = notes[note % 12]
             return (f"{note_name}{octave}", 3)
+
+    last_hit_log = ["No pad hits yet."]
 
     if push_in_name:
         import threading
@@ -293,12 +295,13 @@ def jam_command(
 
                             # Drum Pads (36..99)
                             sample_name, ch = _get_midi_note_sample(msg.note)
-                            # True velocity sensitivity (0.01..1.0 gain)
-                            scaled_gain = msg.velocity / 127.0
+                            scaled_gain = max(0.4, msg.velocity / 127.0)
                             eng = get_engine()
                             if eng:
                                 eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
                             active_hits[sample_name] = time.time()
+                            active_hits["kick" if "kick" in sample_name else ("snare" if "snare" in sample_name else ("hats" if "hat" in sample_name else "bass"))] = time.time()
+                            last_hit_log[0] = f"⚡ Push 2 Pad {msg.note} -> {sample_name} (vel {msg.velocity})"
                         elif msg.type == "control_change":
                             # Encoders 1..4 (CC 71..74) -> Channel 0..3 Gain / Volume
                             if 71 <= msg.control <= 74:
@@ -361,6 +364,7 @@ def jam_command(
         body = Table.grid(padding=1)
         body.add_row(f"BPM: [cyan]{effective_bpm:.1f}[/cyan]  |  Genre: [magenta]{selected_genre.value.upper()}[/magenta]  |  Push 2: {push_status}")
         body.add_row(table)
+        body.add_row(f"[bold cyan]{last_hit_log[0]}[/bold cyan]")
         body.add_row("[dim]Press Ctrl-C to stop jamming.[/dim]")
 
         return Panel(body, title="🎵 audx live jam session & pad grid", border_style="green")

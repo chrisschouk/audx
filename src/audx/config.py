@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 from typing import Final
 
-HOME: Final = Path.home()
+_sudo_user = os.environ.get("SUDO_USER")
+HOME: Final = Path(f"/Users/{_sudo_user}") if _sudo_user and Path(f"/Users/{_sudo_user}").exists() else Path.home()
 CONFIG_DIR: Final = HOME / "Library" / "Application Support" / "audx"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
