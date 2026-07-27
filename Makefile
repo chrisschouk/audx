@@ -1,21 +1,27 @@
-.PHONY: test lint format build publish
+.PHONY: dev test lint format build publish-npm publish-py
+
+dev:
+	python3 -m venv .venv || true
+	.venv/bin/python -m pip install -e .[dev]
+	@echo "✓ Development environment ready in .venv"
+	@echo "Note: On macOS, install PortAudio via: brew install portaudio"
+	@echo "      On Linux, install PortAudio via: sudo apt install libportaudio2"
 
 test:
-	pytest -q
+	uv run pytest -q
 
 lint:
-	flake8 src/
-	mypy src/
+	uv run ruff check src tests
+	uv run mypy src/audx
 
 format:
-	black src/ tests/
-	isort src/ tests/
+	uv run ruff format src tests
 
 build:
-	python -m build
+	uv build
 
 publish-npm:
 	npm publish
 
 publish-py:
-	twine upload dist/*
+	uv publish

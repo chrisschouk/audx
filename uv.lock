@@ -94,6 +94,7 @@ name = "audx"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "mido" },
     { name = "numpy" },
     { name = "python-osc" },
@@ -123,6 +124,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.0.0" },
     { name = "librosa", marker = "extra == 'ai'", specifier = ">=0.10.0" },
     { name = "mido", specifier = ">=1.3.3" },
     { name = "numpy", specifier = ">=1.26.0" },

@@ -38,6 +38,49 @@ class SampleLibrary:
         """Backward-compatible access for old callers/tests."""
         return self.samples
 
+    def auto_scan_hd(self) -> dict[str, int]:
+        """Automatically scan standard user audio directories across the system."""
+        home = Path.home()
+        target_dirs = [
+            self.root,
+            home / "Music",
+            home / "Downloads",
+            home / "Samples",
+            home / "Documents",
+            Path("/Users/Shared"),
+        ]
+        extensions = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif"}
+        count = 0
+        categories: dict[str, int] = {}
+        for directory in target_dirs:
+            if not directory.exists() or not directory.is_dir():
+                continue
+            for path in directory.rglob("*"):
+                if not path.is_file() or path.suffix.lower() not in extensions:
+                    continue
+                try:
+                    rel = str(path)
+                    if rel in self.samples:
+                        continue
+                    tags = self._extract_tags(path.stem)
+                    self.samples[rel] = {
+                        "path": str(path),
+                        "name": path.name,
+                        "duration": 1.0,
+                        "sr": 48000,
+                        "channels": 2,
+                        "tags": tags,
+                    }
+                    count += 1
+                    for tag in tags:
+                        self.samples_by_tag.setdefault(tag, []).append(rel)
+                        categories[tag] = categories.get(tag, 0) + 1
+                except Exception:
+                    continue
+        if count > 0:
+            self.save_index()
+        return {"total": count, **categories}
+
     def build_index(self, recursive: bool = True) -> dict[str, dict]:
         self.samples = {}
         self.samples_by_tag = {}

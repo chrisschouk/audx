@@ -57,11 +57,17 @@ class Project:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def save(self, path: Path) -> None:
+        import os
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = asdict(self)
-        with path.open("w") as f:
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with tmp_path.open("w") as f:
             json.dump(data, f, indent=2, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(path)
 
     @classmethod
     def load(cls, path: Path) -> Project:

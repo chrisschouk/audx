@@ -46,21 +46,28 @@ class AudioEngine:
     def start(self) -> None:
         if self.stream and self.stream.active:
             return
-        self.stream = sd.OutputStream(
-            samplerate=self.sample_rate,
-            blocksize=self.buffer_size,
-            channels=2,
-            dtype='float32',
-            callback=self._audio_callback,
-            finished_callback=self._stream_finished
-        )
-        self.stream.start()
-        self.running = True
+        try:
+            self.stream = sd.OutputStream(
+                samplerate=self.sample_rate,
+                blocksize=self.buffer_size,
+                channels=2,
+                dtype='float32',
+                callback=self._audio_callback,
+                finished_callback=self._stream_finished
+            )
+            self.stream.start()
+            self.running = True
+        except Exception as exc:
+            self.running = False
+            raise RuntimeError(f"Audio output device error: {exc}") from exc
 
     def stop(self) -> None:
         if self.stream:
-            self.stream.stop()
-            self.stream.close()
+            try:
+                self.stream.stop()
+                self.stream.close()
+            except Exception:
+                pass
             self.stream = None
         self.running = False
 
@@ -72,17 +79,20 @@ class AudioEngine:
         delta_time = frames / self.sample_rate
         pattern_steps = self.pattern_engine.tick(delta_time)
         for step in pattern_steps:
+            ch = max(0, min(int(step.channel), self.channels - 1))
+            velocity = step.velocity
             # Resolve sample path using global sample library
             sample_path = self.sample_library.resolve(step.sample)
+            sample_voice: Voice
             if sample_path and sample_path.exists():
-                ch = step.channel
-                ch = max(0, min(int(ch), self.channels - 1))
-                velocity = step.velocity
                 sample_voice = SampleVoice(str(sample_path), channel=ch, gain=velocity, pan=0.0)
-                with self.lock:
-                    self.active_voices.append(sample_voice)
             else:
-                print(f"[WARN] Sample not found: {step.sample}")
+                from audx.audio.synth import SynthVoice
+
+                sample_voice = SynthVoice(step.sample, channel=ch, gain=velocity, pan=0.0, sample_rate=self.sample_rate)
+
+            with self.lock:
+                self.active_voices.append(sample_voice)
 
         with self.lock:
             alive: list[Voice] = []

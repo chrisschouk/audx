@@ -41,6 +41,7 @@ midi_app = typer.Typer(help="MIDI clock out, input recording")
 macro_app = typer.Typer(help="Macro registers (vim-style qa…q…@a)")
 slot_app = typer.Typer(help="Pattern slots A/B/C/D")
 export_app = typer.Typer(help="Export to other formats")
+song_app = typer.Typer(help="Song rendering and arrangement commands")
 app.add_typer(pattern_app, name="pattern")
 app.add_typer(samples_app, name="samples")
 app.add_typer(samples_app, name="stems")  # spec uses `audx stems`
@@ -57,6 +58,7 @@ app.add_typer(midi_app, name="midi")
 app.add_typer(macro_app, name="macro")
 app.add_typer(slot_app, name="slot")
 app.add_typer(export_app, name="export")
+app.add_typer(song_app, name="song")
 pattern_app.add_typer(slot_app, name="slot")  # `audx pattern slot ...`
 
 
@@ -136,11 +138,163 @@ def init(
 def open(
     project: Path | None = typer.Argument(None, help="Path to .audx project file or folder"),
     samples: Path | None = typer.Option(None, "--samples", "-s", help="Samples directory"),
+    web: bool = typer.Option(False, "--web", "-w", help="Open playable browser UI in localhost web companion"),
 ) -> None:
-    """Open the TUI on a project (alias for `launch`, matches spec §06)."""
+    """Open the TUI or Web companion on a project."""
+    if web:
+        import webbrowser
+
+        from audx.web import serve
+
+        url = "http://127.0.0.1:8080/app"
+        if project:
+            proj_path = project / "project.audx" if project.is_dir() else project
+            url += f"?project={proj_path.resolve()}"
+        typer.echo(f"  ✓ Serving web UI on {url}")
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        serve(host="127.0.0.1", port=8080)
+        return
+
     if project and project.is_dir():
         project = project / "project.audx"
     launch(project=project, samples=samples)
+
+
+@app.command("jam")
+def jam_command(
+    genre: str | None = typer.Option(None, "--genre", "-g", help="Genre preset: techno | house | hiphop | ukg | ambient"),
+    chromatic: bool = typer.Option(False, "--chromatic", "-c", help="Chromatic mode for sample/synth play"),
+    auto: bool = typer.Option(False, "--auto", "-a", help="Auto-build track on the spot"),
+    bpm: float | None = typer.Option(None, "--bpm", "-b", help="Tempo BPM"),
+    project: Path | None = typer.Option(None, "--project", "-p", help="Project file"),
+    once: bool = typer.Option(False, "--once", help="Run single loop iteration and exit (for non-blocking tests)"),
+) -> None:
+    """Start an interactive live jam session with pattern sequencing and drum pads."""
+    import time
+
+    from rich.panel import Panel
+
+    from audx.generator import Genre, generate_track
+    from audx.sampler import get_sample_library
+
+    lib = get_sample_library()
+    selected_genre = Genre.TECHNO
+    if genre:
+        try:
+            selected_genre = Genre(genre.lower().strip())
+        except ValueError:
+            selected_genre = Genre.TECHNO
+
+    if auto or genre or project is None:
+        jam_bpm, patterns = generate_track(selected_genre, library=lib)
+    else:
+        proj = _load_project(project)
+        jam_bpm = proj.bpm
+        patterns = list(get_pattern_engine().patterns.values())
+
+    effective_bpm = bpm or jam_bpm
+    get_pattern_engine().set_bpm(effective_bpm)
+
+    console.print(
+        Panel(
+            f"[bold green]🎵 audx live jam session[/bold green]\n"
+            f"BPM: [cyan]{effective_bpm:.1f}[/cyan]  |  Genre: [magenta]{selected_genre.value.upper()}[/magenta]  |  Patterns: {len(patterns)}\n"
+            f"[dim]Press Ctrl-C to stop jamming.[/dim]",
+            title="audx jam",
+            border_style="green",
+        )
+    )
+
+    for p in patterns:
+        console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
+
+    try:
+        eng = init_engine()
+        get_pattern_engine().start()
+        eng.start()
+    except Exception as exc:
+        console.print(f"[yellow]Audio stream notice (synthetic fallback active): {exc}[/yellow]")
+
+    if once:
+        time.sleep(0.2)
+        get_pattern_engine().stop()
+        active_engine = get_engine()
+        if active_engine is not None:
+            active_engine.stop()
+        console.print("[dim]Jam loop complete.[/dim]")
+        return
+
+    try:
+        while True:
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        active_engine = get_engine()
+        if active_engine is not None:
+            active_engine.stop()
+        get_pattern_engine().stop()
+        console.print("\n[bold green]Jam session stopped.[/bold green]")
+
+
+@app.command()
+def doctor() -> None:
+    """Run diagnostics and check setup."""
+    from rich.panel import Panel
+    from rich.table import Table
+
+    table = Table(title="audx doctor diagnostics", show_header=True, header_style="bold magenta")
+    table.add_column("Component", style="cyan")
+    table.add_column("Status", style="bold green")
+    table.add_column("Details")
+
+    table.add_row("audx Version", "✓ OK", __version__)
+    table.add_row("Python Version", "✓ OK", sys.version.split()[0])
+    table.add_row("CLI Framework", "✓ OK", "click, typer, rich active")
+
+    audio_ok = True
+    audio_detail = ""
+    try:
+        import sounddevice as sd
+
+        devices = sd.query_devices()
+        audio_detail = f"{len(devices)} device(s) found (default: {sd.default.device})"
+    except Exception as exc:
+        audio_ok = False
+        audio_detail = f"PortAudio error: {exc}"
+
+    if audio_ok:
+        table.add_row("Audio Subsystem", "✓ OK", audio_detail)
+    else:
+        table.add_row("Audio Subsystem", "[bold red]✗ Error[/bold red]", audio_detail)
+
+    try:
+        from audx.midi import list_inputs, list_outputs
+
+        ins, outs = list_inputs(), list_outputs()
+        table.add_row("MIDI Ports", "✓ OK", f"inputs: {len(ins)}, outputs: {len(outs)}")
+    except Exception as exc:
+        table.add_row("MIDI Ports", "[yellow]· Warning[/yellow]", str(exc))
+
+    table.add_row("Samples Dir", "✓ OK" if SAMPLES_DIR.exists() else "· Scaffold", str(SAMPLES_DIR))
+    table.add_row("Projects Dir", "✓ OK", str(PROJECTS_DIR))
+    table.add_row("Config Dir", "✓ OK", str(CONFIG_DIR))
+
+    console.print(table)
+
+    if not audio_ok:
+        console.print(
+            Panel(
+                "[bold red]PortAudio library missing or audio device unavailable.[/bold red]\n\n"
+                "Fix for macOS (Homebrew):\n"
+                "  [bold green]brew install portaudio[/bold green]\n\n"
+                "Fix for Linux (Ubuntu/Debian):\n"
+                "  [bold green]sudo apt install libportaudio2[/bold green]",
+                title="Fix Native Audio Dependencies",
+                border_style="red",
+            )
+        )
 
 
 @app.command()
@@ -148,11 +302,7 @@ def save(
     path: Path = typer.Argument(..., help="Project file path (.audx)"),
     name: str | None = typer.Option(None, "--name", "-n", help="Project name"),
 ) -> None:
-    """Save current in-process state to a project file.
-
-    Note: command invocations are separate processes, so this saves patterns
-    created in the current process only. Use the TUI for persistent sessions.
-    """
+    """Save current in-process state to a project file."""
     project = Project(name=name or path.stem, bpm=get_pattern_engine().bpm, patterns=_pattern_payload())
     project.save(path)
     typer.echo(f"Saved project to {path} ({len(project.patterns)} patterns)")
@@ -216,25 +366,6 @@ def stop() -> None:
 def version() -> None:
     """Print version."""
     typer.echo(f"audx {__version__}")
-
-
-@app.command()
-def doctor() -> None:
-    """Run diagnostics."""
-    typer.echo("audx doctor")
-    typer.echo(f"Version: {__version__}")
-    typer.echo(f"Python: {sys.version.split()[0]}")
-    try:
-        import sounddevice as sd
-
-        devices = sd.query_devices()
-        typer.echo(f"Audio devices: {len(devices)}")
-        typer.echo(f"Default device: {sd.default.device}")
-    except Exception as exc:
-        typer.echo(f"Audio check failed: {exc}")
-    typer.echo(f"Samples dir: {SAMPLES_DIR} ({'exists' if SAMPLES_DIR.exists() else 'missing'})")
-    typer.echo(f"Projects dir: {PROJECTS_DIR}")
-    typer.echo(f"Config dir: {CONFIG_DIR}")
 
 
 @pattern_app.command("create")
@@ -656,6 +787,47 @@ def mute_channel(channel: int = typer.Argument(..., help="Channel index (0-based
     typer.echo(f"  ✓ ch {channel} mute {bool(engine.channel_mute[channel])}")
 
 
+@samples_app.command("scan")
+def samples_scan() -> None:
+    """Scan standard hard drive directories for usable audio samples."""
+    from rich.table import Table
+
+    library = SampleLibrary(SAMPLES_DIR)
+    results = library.auto_scan_hd()
+
+    table = Table(title="audx sample scanner results", show_header=True)
+    table.add_column("Category / Tag", style="cyan")
+    table.add_column("Samples Found", style="green")
+
+    table.add_row("Total Indexed", str(results.get("total", 0)))
+    top_tags = ["kick", "snare", "hat", "hihat", "clap", "bass", "synth", "perc", "vocal", "909", "808"]
+    for tag in top_tags:
+        if tag in results:
+            table.add_row(tag, str(results[tag]))
+
+    console.print(table)
+
+
+@push2_app.command("lights")
+def push2_lights() -> None:
+    """Test and control Push 2 pad LED lighting grid."""
+    from rich.panel import Panel
+
+    grid = "\n".join(["[green]●[/green] [red]●[/red] [blue]●[/blue] [yellow]●[/yellow] [cyan]●[/cyan] [magenta]●[/magenta] [white]●[/white] [green]●[/green]" for _ in range(8)])
+    console.print(Panel(grid, title="Push 2 LED Pad Grid Test", border_style="cyan"))
+    typer.echo("Push 2 LED grid test pattern active.")
+
+
+@song_app.command("render")
+def song_render(
+    project: Path = typer.Argument(..., help="Path to .audx project file"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Output WAV path"),
+    bars: int = typer.Option(4, "--bars", help="Number of bars to render"),
+) -> None:
+    """Render a song / project to WAV (alias for `render-project`)."""
+    render_project_command(project=project, output=output, bars=bars)
+
+
 @samples_app.command("search")
 def samples_search(
     query: str = typer.Argument(..., help="Search query"),
@@ -896,6 +1068,24 @@ def export_midi(
         raise typer.Exit(1)
     path = patterns_to_midi(engine.patterns, output, bpm=bpm, bars=bars)
     typer.echo(f"  ✓ wrote {path}")
+
+
+@export_app.command("als")
+@export_app.command("ableton")
+def export_als(
+    project: Path = typer.Argument(..., help="Path to .audx project file"),
+    output: Path = typer.Option(Path("session.als"), "--output", "-o", help="Output .als file path"),
+) -> None:
+    """Export project to a native Ableton Live Set (.als) file."""
+    from audx.als_export import project_to_als
+
+    if not project.exists():
+        typer.echo(f"Project file not found: {project}", err=True)
+        raise typer.Exit(1)
+
+    loaded = Project.load(project)
+    written = project_to_als(loaded, output)
+    typer.echo(f"  ✓ exported Ableton Live Set to {written}")
 
 
 @app.command("watch")

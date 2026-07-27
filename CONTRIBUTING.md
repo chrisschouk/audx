@@ -1,14 +1,35 @@
 # Contributing to audx
 
-audx is a local-first terminal and browser music tool. The current goal is a
-usable alpha: load stems, write patterns, play locally, render WAVs, and keep
-the project file readable.
+audx is a local-first terminal and browser music tool. The goal is a usable, magical workflow: scan your hard drive, write patterns, jam live, render WAVs, export to Ableton Live Sets (`.als`), and keep the project file clean.
 
 ## Local Setup
 
+### macOS / Linux Venv Setup
 ```bash
-uv sync
-uv run audx doctor
+make dev
+# or manually:
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .[dev]
+
+# Native audio drivers
+brew install portaudio            # macOS
+# or: sudo apt install libportaudio2  # Linux
+```
+
+## Maintainer Sanity Check
+
+Run this baseline suite to verify the CLI before opening a PR:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+audx doctor
+audx midi list
+audx jam --once
+audx open --help
 ```
 
 ## Checks
@@ -24,17 +45,7 @@ uv build
 
 ## Development Principles
 
-- Keep the `.audx` file as the source of truth.
-- Prefer local/offline behaviour. Network features must be explicit and opt-in.
-- Add tests for new behaviour before implementation.
-- Keep CLI output scriptable and calm.
-- Be honest in docs about alpha features and scaffolds.
-
-## Useful Commands
-
-```bash
-uv run audx init demo --parent /tmp --no-git
-uv run audx load /path/to/kick.wav --ch 0 --project /tmp/demo/project.audx
-uv run audx render-project /tmp/demo/project.audx --output /tmp/demo/renders/demo.wav
-uv run audx serve --port 8080
-```
+- Keep the `.audx` file as the source of truth with atomic writes.
+- Prefer local/offline behaviour with zero-config synthetic audio fallbacks.
+- Add tests for new CLI subcommands and audio behavior before implementation.
+- Keep CLI output scriptable, beautiful, and calm.

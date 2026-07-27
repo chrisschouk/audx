@@ -66,3 +66,63 @@ def test_render_project_command_writes_wav(tmp_path: Path):
 
     assert result.exit_code == 0
     assert output.exists()
+
+
+def test_doctor_command_runs_diagnostics():
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 0
+    assert "diagnostics" in result.output.lower() or "version" in result.output.lower()
+
+
+def test_midi_list_command():
+    result = runner.invoke(app, ["midi", "list"])
+    assert result.exit_code == 0
+    assert "inputs:" in result.output
+
+
+def test_jam_command_with_once_flag():
+    result = runner.invoke(app, ["jam", "--once"])
+    assert result.exit_code == 0
+    assert "jam session" in result.output.lower() or "jam loop complete" in result.output.lower()
+
+
+def test_jam_command_with_genre_flag():
+    result = runner.invoke(app, ["jam", "--genre", "house", "--once"])
+    assert result.exit_code == 0
+    assert "house" in result.output.lower()
+
+
+def test_samples_scan_command():
+    result = runner.invoke(app, ["samples", "scan"])
+    assert result.exit_code == 0
+    assert "results" in result.output.lower() or "indexed" in result.output.lower()
+
+
+def test_push2_lights_command():
+    result = runner.invoke(app, ["push2", "lights"])
+    assert result.exit_code == 0
+    assert "push 2" in result.output.lower()
+
+
+def test_song_render_command(tmp_path: Path):
+    project_path = init_project("song-render-cli", parent=tmp_path, git=False)
+    sample_path = tmp_path / "kick.wav"
+    sf.write(sample_path, np.ones((128, 1), dtype=np.float32) * 0.2, 44100)
+    project = Project.load(project_path)
+    project.add_stem(project_path, sample_path, channel=0, name="kick")
+    project.save(project_path)
+    output = tmp_path / "song.wav"
+
+    result = runner.invoke(app, ["song", "render", str(project_path), "--output", str(output), "--bars", "1"])
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_export_als_command(tmp_path: Path):
+    project_path = init_project("als-cli", parent=tmp_path, git=False)
+    output = tmp_path / "session.als"
+
+    result = runner.invoke(app, ["export", "als", str(project_path), "--output", str(output)])
+    assert result.exit_code == 0
+    assert output.exists()
+
