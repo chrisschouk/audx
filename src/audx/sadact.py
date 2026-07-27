@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests  # type: ignore[import-untyped]
+import requests
 
 DEFAULT_URL = "http://localhost:5742"
 

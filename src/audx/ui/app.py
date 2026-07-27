@@ -154,112 +154,6 @@ class TapTempoCounter:
         return round(60.0 / (sum(intervals) / len(intervals)), 1)
 
 
-def _db(level: float) -> str:
-    if level <= 0.00001:
-        return "-inf"
-    import math
-
-    return f"{20 * math.log10(level):+5.1f}"
-
-
-def _level_bar(level: float, width: int = 24) -> str:
-    level = max(0.0, min(float(level), 1.0))
-    filled = int(level * width)
-    return "█" * filled + "░" * (width - filled)
-
-
-def _pattern_grid(pattern, cells: int = 16) -> list[bool]:
-    grid = [False] * cells
-    for step in pattern.steps:
-        index = round((step.beat % pattern.length_beats) / pattern.length_beats * cells)
-        if 0 <= index < cells:
-            grid[index] = True
-    return grid
-
-
-class TransportHeader(Static):
-    """Fixed-width transport header inspired by the CLI spec."""
-
-    def render(self) -> str:
-        pattern_engine = get_pattern_engine()
-        engine = get_engine()
-        playing = bool(pattern_engine.running)
-        project = Path(getattr(self.app, "project", "") or "last.audx").name
-        bpm = f"{pattern_engine.bpm:06.1f}"
-        pos = f"{pattern_engine.current_bar + 1:03d}:{int(pattern_engine.current_beat) + 1:02d}"
-        rate = getattr(engine, "sample_rate", 48000) if engine else 48000
-        title = f"{'▶' if playing else '■'} audx  {project}"
-        right = f"{'▶' if playing else '■'} {bpm} bpm  4/4  {rate // 1000:02d}k  cpu --  bar {pos}"
-        width = max(80, self.app.size.width if self.app.size else 100)
-        gap = max(1, width - len(title) - len(right) - 1)
-        return f"{title}{' ' * gap}{right}"
-
-
-class MixerTable(Static):
-    """Dense row-based mixer table."""
-
-    def render(self) -> str:
-        engine = get_engine()
-        pattern_engine = get_pattern_engine()
-        levels = engine.get_channel_levels() if engine else [0.0] * CHANNELS_COUNT
-        patterns = list(pattern_engine.patterns.values())
-        by_channel = {pattern.channel: pattern for pattern in patterns}
-        selected = getattr(self.app, "selected_channel", 0)
-        rows = ["ch  · name      lvl                            peak    gain    M S    sample / dsl"]
-        for channel in range(CHANNELS_COUNT):
-            pattern = by_channel.get(channel)
-            level = float(levels[channel]) if channel < len(levels) else 0.0
-            gain = float(engine.channel_gain[channel]) if engine is not None else 1.0
-            muted = bool(engine.channel_mute[channel]) if engine is not None else False
-            marker = "▮" if pattern and not muted else "·"
-            name = (pattern.name if pattern else f"ch{channel:02d}")[:8]
-            detail = pattern.dsl if pattern else "— empty —"
-            cursor = ">" if channel == selected else " "
-            mute = "M" if muted else " "
-            rows.append(
-                f"{cursor}{channel + 1:02d}  {marker} {name:<8} "
-                f"{_level_bar(level)}  {_db(level):>7}  {_db(gain):>6}   {mute}      {detail[:42]}"
-            )
-        return "\n".join(rows)
-
-
-class PatternGrid(Static):
-    """Step grid for the currently loaded patterns."""
-
-    def render(self) -> str:
-        pattern_engine = get_pattern_engine()
-        patterns = list(pattern_engine.patterns.values())
-        selected_channel = getattr(self.app, "selected_channel", 0)
-        selected_step = getattr(self.app, "selected_step", 0)
-        playhead = int((pattern_engine.current_beat / 4.0) * 16) % 16
-        rows = ["     " + "  ".join(f"{i:02d}" for i in range(1, 17))]
-        if not patterns:
-            rows.append("     · no patterns yet · `audx pattern set 0 \"kick 4/4\"`")
-            return "\n".join(rows)
-        for pattern in patterns[:8]:
-            grid = _pattern_grid(pattern)
-            cells = []
-            for index, active in enumerate(grid):
-                if pattern.channel == selected_channel and index == selected_step:
-                    cells.append("▣" if active else "□")
-                elif index == playhead and pattern_engine.running:
-                    cells.append("▓" if active else "▒")
-                else:
-                    cells.append("█" if active else "·")
-            rows.append(f"{pattern.name[:4]:<4} " + "   ".join(cells))
-        return "\n".join(rows)
-
-
-class CommandLine(Static):
-    """Bottom command prompt."""
-
-    def render(self) -> str:
-        mode = getattr(self.app, "mode", "NORMAL")
-        command = getattr(self.app, "command_buffer", "")
-        prefix = ":" if mode == "COMMAND" else "audx>"
-        return f"{prefix} {command}"
-
-
 class TransportBar(Horizontal):
     """Transport controls."""
 
@@ -309,6 +203,15 @@ class StatusLine(Static):
         return f"[{mode}]  PAT {slots}  ·  ? help  ·  q quit"
 
 
+class PadHint(Static):
+    """Subtle one-line hint listing the live drum-pad keys."""
+
+    def render(self) -> str:
+        order = ("w", "e", "r", "a", "s", "d", "f", "z", "x", "c", "u", "i", "o")
+        pads = " ".join(f"{k}:{SYNTH_PADS[k][0]}" for k in order if k in SYNTH_PADS)
+        return f"pads  {pads}"
+
+
 class DAWApp(App):
     """audx TUI: compact mixer + transport with vim-style modal bindings."""
 
@@ -316,17 +219,13 @@ class DAWApp(App):
     Screen { background: #111111; color: #e0e0e0; }
     Header { background: #1e1e1e; color: #d4a574; text-style: bold; }
     Footer { background: #1e1e1e; }
-    #transport-header { height: 1; color: #d4a574; background: #08070a; }
-    #divider-a, #divider-b, #divider-c { height: 1; color: #4a4238; }
-    #mixer-table { height: auto; color: #e8dccb; }
-    #pattern-grid { height: auto; color: #e8dccb; }
-    #command-line { height: 1; color: #d4a574; background: #0e0c10; }
     #mixer { height: 1fr; }
     ChannelStrip { width: 9; background: #1e1e1e; border: solid #333333; margin: 1; }
     VUMeter { color: #a8c087; height: 1; }
     PatternRow { height: 3; background: #161616; border: solid #333333; margin: 1; }
     TransportBar { height: 3; background: #1e1e1e; border: solid #333333; margin: 1; }
     StatusLine { height: 1; background: #1e1e1e; color: #d4a574; }
+    PadHint { height: 1; background: #161616; color: #7a8a6a; text-style: dim; }
     """
 
     TITLE = "audx"
@@ -347,18 +246,15 @@ class DAWApp(App):
         self.active_slot = "A"
         self.mode = "NORMAL"
         self.selected_channel = 0
-        self.selected_step = 0
-        self.command_buffer = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield TransportHeader(id="transport-header")
-        yield Static("─" * 120, id="divider-a")
-        yield MixerTable(id="mixer-table")
-        yield Static("─" * 120, id="divider-b")
-        yield PatternGrid(id="pattern-grid")
-        yield Static("─" * 120, id="divider-c")
-        yield CommandLine(id="command-line")
+        with Horizontal(id="mixer"):
+            for channel in range(CHANNELS_COUNT):
+                yield ChannelStrip(channel=channel, label=f"{channel + 1:02d}")
+        yield PatternRow()
+        yield TransportBar()
+        yield PadHint(id="pad-hint")
         yield StatusLine(id="status")
         yield Footer()
 
@@ -390,8 +286,12 @@ class DAWApp(App):
         return path
 
     def update_meters(self) -> None:
-        for widget_id in ("#transport-header", "#mixer-table", "#pattern-grid", "#command-line", "#status"):
-            self.query_one(widget_id, Static).refresh()
+        engine = get_engine()
+        if engine is None:
+            return
+        levels = engine.get_channel_levels()
+        for channel in range(min(CHANNELS_COUNT, len(levels))):
+            self.query_one(f"#vu-{channel}", VUMeter).level = float(levels[channel])
 
     def _trigger_pad(self, key: str) -> bool:
         """Play the live synth pad bound to ``key``. Returns True if consumed."""
@@ -410,14 +310,17 @@ class DAWApp(App):
         engine = get_engine()
         pattern_engine = get_pattern_engine()
 
+        # Live finger-drumming: pad keys play a synth voice and are otherwise
+        # not consumed by any existing binding, so handle them first.
+        if self._trigger_pad(key):
+            return
+
         if key == "space":
-            engine = engine or init_engine()
-            if pattern_engine.running:
-                engine.stop()
-                pattern_engine.stop()
+            play_button = self.query_one("#play", Button)
+            if str(play_button.label) == "▶":
+                play_button.press()
             else:
-                engine.start()
-                pattern_engine.start()
+                self.query_one("#stop", Button).press()
         elif key == "full_stop" or key == ".":
             # stop + return to bar 1
             if engine is not None:
@@ -425,20 +328,11 @@ class DAWApp(App):
             pattern_engine.stop()
             pattern_engine.current_bar = 0
             pattern_engine.current_beat = 0.0
-        elif key in {"h", "left"}:
-            self.selected_step = max(0, self.selected_step - 1)
-        elif key in {"l", "right"}:
-            self.selected_step = min(15, self.selected_step + 1)
-        elif key in {"j", "down"}:
-            self.selected_channel = min(CHANNELS_COUNT - 1, self.selected_channel + 1)
-        elif key in {"k", "up"}:
-            self.selected_channel = max(0, self.selected_channel - 1)
-        elif key == "x":
-            self._toggle_selected_step()
         elif key in "123456789":
             channel = int(key) - 1
             if channel < CHANNELS_COUNT:
                 self.selected_channel = channel
+                self.query_one(f"#mute-{channel}", Button).press()
         elif key in {"left_square_bracket", "["}:
             self.set_bpm(max(20.0, pattern_engine.bpm - 1.0))
         elif key in {"right_square_bracket", "]"}:
@@ -448,45 +342,15 @@ class DAWApp(App):
         elif key in {"right_curly_bracket", "}"}:
             self._adjust_selected_swing(0.01)
         elif key == "t":
-            bpm = self.tap_counter.tap()
-            if bpm is not None:
-                self.set_bpm(bpm)
+            self.query_one("#tap", Button).press()
         elif key == "m":
-            engine = engine or init_engine()
-            engine.channel_mute[self.selected_channel] = not bool(engine.channel_mute[self.selected_channel])
-        elif key == "colon" or key == ":":
-            self.mode = "COMMAND"
-            self.command_buffer = ""
-        elif key == "escape":
-            self.mode = "NORMAL"
-            self.command_buffer = ""
+            self.query_one(f"#mute-{self.selected_channel}", Button).press()
         elif key == "q":
             self.exit()
         elif key in {"shift+1", "shift+2", "shift+3", "shift+4"}:
             slot_index = int(key.split("+")[1])
             self.active_slot = "ABCD"[slot_index - 1]
             self.query_one("#status", StatusLine).refresh()
-        self.query_one("#mixer-table", MixerTable).refresh()
-        self.query_one("#pattern-grid", PatternGrid).refresh()
-        self.query_one("#transport-header", TransportHeader).refresh()
-        self.query_one("#command-line", CommandLine).refresh()
-
-    def _toggle_selected_step(self) -> None:
-        pattern = self._selected_pattern()
-        if pattern is None:
-            pattern = ProjectPatternFactory.create_empty(self.selected_channel)
-            get_pattern_engine().add_pattern(pattern)
-        grid = _pattern_grid(pattern)
-        grid[self.selected_step] = not grid[self.selected_step]
-        source = pattern.steps[0].sample if pattern.steps else pattern.name
-        pattern.dsl = f"{source} [{''.join('1' if cell else '0' for cell in grid)}] | channel {self.selected_channel}"
-        pattern.parse_dsl()
-
-    def _selected_pattern(self):
-        for pattern in get_pattern_engine().patterns.values():
-            if pattern.channel == self.selected_channel:
-                return pattern
-        return None
 
     def _adjust_selected_swing(self, delta: float) -> None:
         engine = get_pattern_engine()
@@ -501,20 +365,8 @@ class DAWApp(App):
         get_pattern_engine().set_bpm(bpm)
 
 
-class ProjectPatternFactory:
-    """Small factory kept out of key handling so empty-track creation is clear."""
-
-    @staticmethod
-    def create_empty(channel: int):
-        from audx.pattern import Pattern
-
-        pattern = Pattern(name=f"ch{channel}", dsl=f"ch{channel} [0000000000000000] | channel {channel}", channel=channel)
-        pattern.parse_dsl()
-        return pattern
-
-
 def run_tui(project: Path | None = None, samples_dir: Path | None = None) -> None:
     DAWApp(project=project, samples_dir=samples_dir).run()
 
 
-__all__ = ["DAWApp", "TapTempoCounter", "run_tui"]
+__all__ = ["SYNTH_PADS", "DAWApp", "TapTempoCounter", "pad_for_key", "run_tui"]

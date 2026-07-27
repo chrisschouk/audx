@@ -2,8 +2,6 @@
 16-channel mixer with per-channel level, pan, sends, and master output.
 """
 
-from typing import cast
-
 import numpy as np
 
 from audx.audio.voice import Voice
@@ -61,4 +59,4 @@ class Mixer:
         mixed *= self.master_level
         # Simple hard limiter (soft clamp)
         np.clip(mixed, -self.master_limiter_threshold, self.master_limiter_threshold, out=mixed)
-        return cast(np.ndarray, mixed)
+        return mixed

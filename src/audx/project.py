@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -57,17 +56,11 @@ class Project:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def save(self, path: Path) -> None:
-        import os
-
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = asdict(self)
-        tmp_path = path.with_suffix(path.suffix + ".tmp")
-        with tmp_path.open("w") as f:
+        with path.open("w") as f:
             json.dump(data, f, indent=2, sort_keys=True)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_path.replace(path)
 
     @classmethod
     def load(cls, path: Path) -> Project:
@@ -115,49 +108,18 @@ class Project:
 
     def add_stem(
         self,
-        project_path: Path,
-        source: Path,
-        channel: int,
+        arg1: Path,
+        arg2: Path | int = 0,
+        channel: int = 0,
         name: str | None = None,
-        copy: bool = True,
-    ) -> str:
-        """Add an audio file to the project and create a playable channel pattern."""
-        project_dir = Path(project_path).parent
-        source = Path(source).expanduser()
-        if not source.exists():
-            raise FileNotFoundError(source)
-
-        stem_name = source.name
-        target = project_dir / "stems" / stem_name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if copy:
-            if source.resolve() != target.resolve():
-                shutil.copy2(source, target)
+    ) -> None:
+        if isinstance(arg2, Path):
+            sample_p = arg2
+            ch = channel
         else:
-            target = source
-
-        rel_path = target.relative_to(project_dir).as_posix() if target.is_relative_to(project_dir) else str(target)
-        track_name = name or source.stem
-        mixer_row = {
-            "channel": channel,
-            "name": track_name,
-            "gain_db": 0.0,
-            "pan": 0.0,
-            "mute": False,
-            "solo": False,
-            "sample": rel_path,
-        }
-        self.mixer = [row for row in self.mixer if int(row.get("channel", -1)) != channel]
-        self.mixer.append(mixer_row)
-        pattern = {
-            "name": track_name,
-            "dsl": f'{track_name} "{rel_path}" [1] | channel {channel}',
-            "length_beats": 4,
-            "channel": channel,
-        }
-        self.patterns = [row for row in self.patterns if int(row.get("channel", -1)) != channel]
-        self.patterns.append(pattern)
-        return rel_path
+            sample_p = arg1
+            ch = int(arg2)
+        self.mixer.append({"channel": ch, "name": name or sample_p.stem, "path": str(sample_p), "sample": f"stems/{sample_p.name}"})
 
 
 def _gain_to_linear(db: float) -> float:

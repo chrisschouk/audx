@@ -12,45 +12,16 @@ import mido
 from audx.pattern import Pattern
 
 
-def _init_mido_backend() -> None:
-    try:
-        import rtmidi  # noqa: F401
-
-        mido.set_backend("mido.backends.rtmidi")
-    except Exception:
-        pass
-
-
 def list_outputs() -> list[str]:
-    _init_mido_backend()
     try:
-        names = list(mido.get_output_names())
-        if names:
-            return names
-    except Exception:
-        pass
-    try:
-        import rtmidi
-
-        mo = rtmidi.MidiOut()
-        return [str(p) for p in mo.get_ports()]
+        return list(mido.get_output_names())
     except Exception:
         return []
 
 
 def list_inputs() -> list[str]:
-    _init_mido_backend()
     try:
-        names = list(mido.get_input_names())
-        if names:
-            return names
-    except Exception:
-        pass
-    try:
-        import rtmidi
-
-        mi = rtmidi.MidiIn()
-        return [str(p) for p in mi.get_ports()]
+        return list(mido.get_input_names())
     except Exception:
         return []
 
@@ -92,7 +63,7 @@ class MidiClock:
         self.port_name = port_name
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self.port: Any | None = None
+        self.port: Any = None  # mido output port (untyped); created on start()
 
     def start(self) -> None:
         ports = list_outputs()

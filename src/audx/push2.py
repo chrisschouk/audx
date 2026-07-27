@@ -1,20 +1,32 @@
-"""Push 2 MIDI mapping, pad lighting, USB display driver, direct USB MIDI reader, and device detection.
+"""Push 2 MIDI mapping + pad LED control.
 
-Full implementation of Ableton Push 2 hardware protocol:
-- Direct USB MIDI: Reads raw 4-byte USB MIDI packets directly from Bulk Endpoint 0x82 (bypassing OS MIDI stack).
-- Display Driver: 960x160 BGR565 XOR 0xE73C frame buffer over USB Bulk Endpoint 0x01 (Vendor ID 0x2982, Product ID 0x1967).
+Push 2 lights its pads when you send notes *back* to it: a note-on on channel 0
+sets pad ``note`` to the colour at palette index ``velocity``. Exact colours are
+defined with a SysEx "set colour palette entry" command and then reapplied. See
+Ableton's Push 2 MIDI & Display Interface spec.
+
+This module exposes:
+- the original control-name map (``list_push2_map``),
+- a drum-kit pad layout (``push2_pad_layout``) used by ``audx jam``,
+- ``Push2Lights`` to paint/flash/clear the pads,
+- port discovery helpers.
 """
 
 from __future__ import annotations
 
-import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-import mido
-import numpy as np
+# Push 2 user SysEx prefix: 00 21 1D (Ableton) 01 (device) 01 (model).
+_SYSEX_HEADER = (0x00, 0x21, 0x1D, 0x01, 0x01)
+_CMD_SET_PALETTE = 0x03
+_CMD_REAPPLY_PALETTE = 0x05
+
+# Pads form an 8x8 grid of notes 36..99; bottom-left = 36, +1 right, +8 up.
+PAD_BASE_NOTE = 36
+WHITE_INDEX = 122  # palette slot we set to white for the "hit" flash
+OFF_INDEX = 0
 
 
 @dataclass(frozen=True)
@@ -30,21 +42,10 @@ DEFAULT_PUSH2_MAP = [
     Push2Control("stop", "note", 86, "Transport stop"),
     Push2Control("record", "note", 87, "Record/arm placeholder"),
     Push2Control("tap_tempo", "note", 3, "Tap tempo"),
-    Push2Control("encoder_1", "cc", 71, "Channel 1 gain"),
-    Push2Control("encoder_2", "cc", 72, "Channel 2 gain"),
-    Push2Control("encoder_3", "cc", 73, "Channel 3 gain"),
-    Push2Control("encoder_4", "cc", 74, "Channel 4 gain"),
-    Push2Control("encoder_5", "cc", 75, "Channel 1 pan"),
-    Push2Control("encoder_6", "cc", 76, "Channel 2 pan"),
-    Push2Control("encoder_7", "cc", 77, "Channel 3 pan"),
-    Push2Control("encoder_8", "cc", 78, "Channel 4 pan"),
-    Push2Control("tempo_encoder", "cc", 14, "BPM tempo adjust"),
-    Push2Control("swing_encoder", "cc", 15, "Swing percent adjust"),
-    Push2Control("master_encoder", "cc", 79, "Master volume level"),
-    Push2Control("track_mute_1", "note", 20, "Channel 1 Mute toggle"),
-    Push2Control("track_mute_2", "note", 21, "Channel 2 Mute toggle"),
-    Push2Control("track_mute_3", "note", 22, "Channel 3 Mute toggle"),
-    Push2Control("track_mute_4", "note", 23, "Channel 4 Mute toggle"),
+    Push2Control("encoder_1", "cc", 14, "Channel 1 gain"),
+    Push2Control("encoder_2", "cc", 15, "Channel 2 gain"),
+    Push2Control("encoder_3", "cc", 16, "Channel 3 gain"),
+    Push2Control("encoder_4", "cc", 17, "Channel 4 gain"),
 ]
 
 
@@ -52,212 +53,159 @@ def list_push2_map() -> list[Push2Control]:
     return DEFAULT_PUSH2_MAP.copy()
 
 
-def find_push2_output() -> str | None:
-    """Find Push 2 MIDI output port name."""
+# ── drum-kit pad layout ───────────────────────────────────────────────────────
+
+# Voices laid left→right along the bottom two rows, each a distinct colour so the
+# kit is learnable at a glance. RGB 0..255.
+PUSH2_PAD_ORDER: tuple[str, ...] = (
+    "kick", "snare", "clap", "hh", "oh", "rim", "tom",
+    "cowbell", "perc", "sub", "ride", "crash", "shaker",
+)
+PUSH2_VOICE_COLORS: dict[str, tuple[int, int, int]] = {
+    "kick": (255, 80, 24),
+    "snare": (255, 196, 40),
+    "clap": (255, 64, 156),
+    "hh": (40, 220, 230),
+    "oh": (36, 210, 168),
+    "rim": (170, 230, 64),
+    "tom": (232, 150, 48),
+    "cowbell": (220, 200, 60),
+    "perc": (170, 92, 240),
+    "sub": (60, 110, 255),
+    "ride": (120, 184, 255),
+    "crash": (230, 72, 230),
+    "shaker": (92, 220, 96),
+}
+
+
+def push2_pad_layout() -> dict[int, tuple[str, int, tuple[int, int, int]]]:
+    """Map Push 2 pad notes → ``(voice, mixer_channel, rgb)`` for the kit."""
+    from audx.live import VOICE_CHANNEL
+
+    layout: dict[int, tuple[str, int, tuple[int, int, int]]] = {}
+    for i, voice in enumerate(PUSH2_PAD_ORDER):
+        note = PAD_BASE_NOTE + i  # 36..48 (bottom two rows)
+        layout[note] = (voice, VOICE_CHANNEL[voice], PUSH2_VOICE_COLORS[voice])
+    return layout
+
+
+# ── port discovery ────────────────────────────────────────────────────────────
+
+
+def find_push2_port(names: list[str], prefer_user: bool = True) -> str | None:
+    """Pick a Push 2 port from ``names`` (prefers the 'User' port for LED control)."""
+    cands = [n for n in names if "push 2" in n.lower()]
+    if not cands:
+        return None
+    if prefer_user:
+        for n in cands:
+            if "user" in n.lower():
+                return n
+    return cands[0]
+
+
+def push2_input_name() -> str | None:
+    import mido
+
     try:
-        for name in mido.get_output_names():
-            if "push" in name.lower():
-                return str(name)
-    except Exception:
-        pass
-    return None
+        return find_push2_port(list(mido.get_input_names()))
+    except Exception:  # no MIDI backend (python-rtmidi) installed
+        return None
 
 
-def find_push2_input() -> str | None:
-    """Find Push 2 MIDI input port name."""
-    try:
-        for name in mido.get_input_names():
-            if "push" in name.lower():
-                return str(name)
-    except Exception:
-        pass
-    return None
-
-
-def light_push2_pads(port_name: str | None = None) -> bool:
-    """Send MIDI note colors to light up the 64-pad grid on Push 2 hardware."""
-    target_port = port_name or find_push2_output()
-    if not target_port:
-        return False
+def open_push2_lights() -> Push2Lights | None:
+    """Open the Push 2 output for LED control, or ``None`` if not present."""
+    import mido
 
     try:
-        with mido.open_output(target_port) as port:
-            for note in range(36, 100):
-                color = 12 if note % 4 == 0 else (45 if note % 4 == 1 else (127 if note % 4 == 2 else 21))
-                port.send(mido.Message("note_on", note=note, velocity=color, channel=0))
-        return True
-    except Exception:
-        return False
+        name = find_push2_port(list(mido.get_output_names()))
+        if name is None:
+            return None
+        port = mido.open_output(name)
+    except Exception:  # no backend / port unavailable
+        return None
+    return Push2Lights(port)
 
 
-def render_push2_display_frame(
-    bpm: float = 128.0,
-    genre: str = "TECHNO",
-    channel_levels: list[float] | None = None,
-    channel_gains: list[float] | None = None,
-) -> bytes:
-    """Generate 327,696-byte USB bulk payload for Ableton Push 2 960x160 LCD screen."""
-    header = b"\xff\xcc\xaa\x88\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-    words = np.zeros((160, 1024), dtype=np.uint16)
-
-    # Background (BGR565)
-    bg_color = (15 & 0x1F) | ((8 & 0x3F) << 5) | ((5 & 0x1F) << 11)
-    words[:, :960] = bg_color
-
-    # Top Banner Header (px 0..32)
-    header_color = (31 & 0x1F) | ((40 & 0x3F) << 5) | ((5 & 0x1F) << 11)
-    words[0:32, :960] = header_color
-
-    # Title Box
-    words[4:28, 20:180] = 0xFFFF
-
-    # Genre Badge
-    yellow_pixel = (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11)
-    words[6:26, 750:920] = yellow_pixel
-
-    levels = channel_levels or [0.7, 0.5, 0.4, 0.8]
-    gains = channel_gains or [1.0, 1.0, 1.0, 1.0]
-
-    ch_colors = [
-        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),
-        (31 & 0x1F) | ((63 & 0x3F) << 5) | ((0 & 0x1F) << 11),
-        (31 & 0x1F) | ((0 & 0x3F) << 5) | ((31 & 0x1F) << 11),
-        (0 & 0x1F) | ((63 & 0x3F) << 5) | ((31 & 0x1F) << 11),
-    ]
-
-    for i in range(min(4, len(levels))):
-        col_start = 30 + i * 230
-        col_end = col_start + 200
-        val = max(0.0, min(1.0, levels[i]))
-
-        words[40:70, col_start:col_end] = (25 & 0x1F) | ((25 & 0x3F) << 5) | ((25 & 0x1F) << 11)
-        words[44:66, col_start + 10 : col_start + 40] = ch_colors[i]
-
-        meter_bg = (10 & 0x1F) | ((5 & 0x3F) << 5) | ((3 & 0x1F) << 11)
-        words[80:150, col_start + 10 : col_start + 60] = meter_bg
-
-        meter_h = int(70 * val)
-        if meter_h > 0:
-            words[150 - meter_h : 150, col_start + 10 : col_start + 60] = ch_colors[i]
-
-        gain_val = max(0.0, min(2.0, gains[i])) / 2.0
-        gain_h = int(70 * gain_val)
-        words[80:150, col_start + 80 : col_start + 180] = (20 & 0x1F) | ((20 & 0x3F) << 5) | ((20 & 0x1F) << 11)
-        if gain_h > 0:
-            words[150 - gain_h : 150, col_start + 80 : col_start + 180] = ch_colors[i]
-
-    # Hardware XOR Scrambling Mask: 0xE73C
-    words ^= 0xE73C
-    return bytes(header + words.tobytes())
+# ── LED control ───────────────────────────────────────────────────────────────
 
 
-class Push2DisplayDriver:
-    VENDOR_ID = 0x2982
-    PRODUCT_ID = 0x1967
-    ENDPOINT_OUT = 0x01
+def _split(value: int) -> tuple[int, int]:
+    """8-bit colour value → (low 7 bits, high 1 bit) for Push 2 SysEx."""
+    value = max(0, min(255, value))
+    return value & 0x7F, (value >> 7) & 0x01
 
-    def __init__(self) -> None:
-        self.device: Any | None = None
-        self._connected = False
-        self._init_usb()
 
-    def _init_usb(self) -> bool:
+class Push2Lights:
+    """Paint, flash and clear Push 2 pads over MIDI.
+
+    ``port`` is any object with a mido-style ``send`` / ``close`` — real hardware
+    in use, a fake in tests.
+    """
+
+    def __init__(self, port: Any, flash_seconds: float = 0.11):
+        self._port = port
+        self._flash_seconds = flash_seconds
+        self._base: dict[int, int] = {}  # pad note → its palette index
+        self._revert: dict[int, float] = {}  # pad note → time to restore colour
+
+    def _sysex(self, *payload: int) -> None:
+        import mido
+
+        self._port.send(mido.Message("sysex", data=[*_SYSEX_HEADER, *payload]))
+
+    def set_color(self, index: int, rgb: tuple[int, int, int], white: int = 0) -> None:
+        r, g, b = rgb
+        self._sysex(
+            _CMD_SET_PALETTE, index, *_split(r), *_split(g), *_split(b), *_split(white)
+        )
+
+    def reapply(self) -> None:
+        self._sysex(_CMD_REAPPLY_PALETTE)
+
+    def _light(self, note: int, index: int) -> None:
+        import mido
+
+        self._port.send(mido.Message("note_on", channel=0, note=note, velocity=index))
+
+    def setup(self, layout: dict[int, tuple[str, int, tuple[int, int, int]]]) -> None:
+        """Define palette colours for the kit and switch the pads on."""
+        self.set_color(OFF_INDEX, (0, 0, 0))
+        self.set_color(WHITE_INDEX, (255, 255, 255), white=255)
+        self._base.clear()
+        for i, (note, (_voice, _ch, rgb)) in enumerate(sorted(layout.items())):
+            idx = i + 1  # palette slots 1..N
+            self.set_color(idx, rgb)
+            self._base[note] = idx
+        self.reapply()
+        for note, idx in self._base.items():
+            self._light(note, idx)
+
+    def flash(self, note: int) -> None:
+        """Briefly light a struck pad white; restored by :meth:`tick`."""
+        if note in self._base:
+            self._light(note, WHITE_INDEX)
+            self._revert[note] = time.monotonic() + self._flash_seconds
+
+    def tick(self) -> None:
+        """Restore pads whose flash has elapsed (call frequently)."""
+        if not self._revert:
+            return
+        now = time.monotonic()
+        for note in [n for n, t in self._revert.items() if now >= t]:
+            self._light(note, self._base[note])
+            del self._revert[note]
+
+    def clear(self) -> None:
+        for note in self._base:
+            self._light(note, OFF_INDEX)
+        self._revert.clear()
+
+    def close(self) -> None:
         try:
-            import usb.core
-            import usb.util
-
-            self.device = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
-            if self.device is not None:
-                try:
-                    if self.device.is_kernel_driver_active(0):
-                        self.device.detach_kernel_driver(0)
-                except Exception:
-                    pass
-                try:
-                    usb.util.claim_interface(self.device, 0)
-                except Exception:
-                    pass
-                self._connected = True
-                return True
-        except Exception:
-            pass
-        self._connected = False
-        return False
-
-    @property
-    def is_connected(self) -> bool:
-        return self._connected
-
-    def send_frame(self, frame_bytes: bytes) -> bool:
-        if self.device is None:
-            if not self._init_usb():
-                return False
-        if self.device is None:
-            return False
-        try:
-            self.device.write(self.ENDPOINT_OUT, frame_bytes, timeout=500)
-            return True
-        except Exception:
-            self._connected = False
-            return False
-
-
-class Push2UsbMidi:
-    """Direct USB Bulk Endpoint 0x82 MIDI Listener for Push 2 on macOS."""
-
-    VENDOR_ID = 0x2982
-    PRODUCT_ID = 0x1967
-    ENDPOINT_IN = 0x82
-
-    def __init__(self, callback: Callable[[str, int, int, int], None]):
-        self.callback = callback
-        self.running = False
-        self.thread: threading.Thread | None = None
-
-    def start(self) -> None:
-        self.running = True
-        self.thread = threading.Thread(target=self._worker, daemon=True)
-        self.thread.start()
-
-    def stop(self) -> None:
-        self.running = False
-
-    def _worker(self) -> None:
-        try:
-            import usb.core
-            import usb.util
-
-            dev = usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID)
-            if dev is None:
-                return
+            self.clear()
+        finally:
             try:
-                if dev.is_kernel_driver_active(2):
-                    dev.detach_kernel_driver(2)
+                self._port.close()
             except Exception:
                 pass
-            try:
-                usb.util.claim_interface(dev, 2)
-            except Exception:
-                pass
-
-            while self.running:
-                try:
-                    data = dev.read(self.ENDPOINT_IN, 64, timeout=200)
-                    if data and len(data) >= 4:
-                        for i in range(0, len(data), 4):
-                            packet = data[i : i + 4]
-                            if len(packet) == 4:
-                                _header, status, d1, d2 = packet
-                                msg_type = status & 0xF0
-                                ch = status & 0x0F
-                                if msg_type == 0x90 and d2 > 0:
-                                    self.callback("note_on", d1, d2, ch)
-                                elif msg_type == 0x80 or (msg_type == 0x90 and d2 == 0):
-                                    self.callback("note_off", d1, d2, ch)
-                                elif msg_type == 0xB0:
-                                    self.callback("control_change", d1, d2, ch)
-                except Exception:
-                    pass
-                time.sleep(0.005)
-        except Exception:
-            pass

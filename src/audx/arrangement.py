@@ -6,13 +6,12 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Any
 
 import numpy as np
 import soundfile as sf
 
 from audx.pattern import Pattern
-from audx.project import Project
 from audx.sampler import SampleLibrary
 from audx.synth import is_synth_voice, synth_voice
 
@@ -275,25 +274,54 @@ def _write_mix(mix: np.ndarray, output_path: Path, sample_rate: int) -> Path:
     return output_path
 
 
-def render_project(project_path: Path, output_path: Path, bars: int | None = None, sample_rate: int = 44100) -> Path:
-    """Render a saved .audx project using stems relative to the project folder."""
-    project_path = Path(project_path)
-    project = Project.load(project_path)
-    library = SampleLibrary(project_path.parent)
-    library.build_index(recursive=True)
-    arrangement = Arrangement(bpm=project.bpm)
-    render_bars = bars or 4
-    for pdata in project.patterns:
-        pattern = Pattern(
-            name=str(pdata["name"]),
-            dsl=str(pdata["dsl"]),
-            length_beats=float(pdata.get("length_beats", 4)),
-            channel=int(pdata.get("channel", 0)),
-            swing=float(pdata.get("swing", 0.0)),
-        )
-        pattern.parse_dsl()
-        arrangement.add(pattern, start_bar=0, bars=render_bars)
-    return render_arrangement(arrangement, library, output_path, sample_rate=sample_rate)
+def _voice_audio(
+    step: object,
+    sample_library: SampleLibrary,
+    sample_rate: int,
+    synth_cache: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    """Resolve a step to stereo ``float32`` audio: real sample, else built-in synth.
+
+    Returns ``None`` when the instrument is neither a known sample nor a synth
+    voice, so the renderer can skip it without crashing.
+    """
+    name = step.sample  # type: ignore[attr-defined]
+    tune = getattr(step, "tune_semitones", 0.0)
+    sample_path = sample_library.resolve(name)
+    if sample_path is not None and sample_path.exists():
+        data, source_sr = sf.read(str(sample_path), dtype="float32", always_2d=True)
+        if source_sr != sample_rate:
+            data = _resample_linear(data, source_sr, sample_rate)
+        if tune:
+            data = _repitch(data, tune)
+        if data.shape[1] == 1:
+            return np.repeat(data, 2, axis=1)
+        return data[:, :2]
+    if is_synth_voice(name):
+        key = f"{name}:{tune}"
+        cached = synth_cache.get(key)
+        if cached is None:
+            mono = synth_voice(name, sample_rate, tune_semitones=tune)
+            cached = np.repeat(mono.reshape(-1, 1), 2, axis=1)
+            synth_cache[key] = cached
+        return cached
+    return None
+
+
+def _repitch(data: np.ndarray, semitones: float) -> np.ndarray:
+    """Vari-speed repitch by resampling (higher pitch = shorter, like a sampler).
+
+    Mirrors how the synth kit honours ``| tune`` so the modifier also works on
+    real WAV samples instead of being silently ignored.
+    """
+    if not semitones:
+        return data
+    ratio = 2.0 ** (semitones / 12.0)
+    target_len = max(1, round(len(data) / ratio))
+    old_x = np.linspace(0.0, 1.0, len(data), endpoint=False)
+    new_x = np.linspace(0.0, 1.0, target_len, endpoint=False)
+    channels = [np.interp(new_x, old_x, data[:, ch]) for ch in range(data.shape[1])]
+    return np.stack(channels, axis=1).astype(np.float32)
 
 
 def _resample_linear(data: np.ndarray, source_sr: int, target_sr: int) -> np.ndarray:
@@ -304,4 +332,4 @@ def _resample_linear(data: np.ndarray, source_sr: int, target_sr: int) -> np.nda
     old_x = np.linspace(0.0, 1.0, len(data), endpoint=False)
     new_x = np.linspace(0.0, 1.0, target_len, endpoint=False)
     channels = [np.interp(new_x, old_x, data[:, ch]) for ch in range(data.shape[1])]
-    return cast(np.ndarray, np.stack(channels, axis=1).astype(np.float32))
+    return np.stack(channels, axis=1).astype(np.float32)

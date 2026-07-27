@@ -1,7 +1,8 @@
-"""Local HTTP companion and browser instrument for `audx serve`.
+"""Read-only HTTP companion (spec §11 `audx serve`).
 
-Localhost-only by default. Exposes the original monitor dashboard plus a
-playable Web Audio UI at /app for loading and auditioning audx projects.
+Localhost-only by default. Renders a live dashboard — a step-sequencer grid with a
+moving playhead plus channel meters — that polls ``/state``, so a phone or a second
+screen can watch the session while audx runs in the terminal. Pure stdlib.
 """
 
 from __future__ import annotations
@@ -9,13 +10,11 @@ from __future__ import annotations
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 from audx.engine import get_engine
 from audx.pattern import get_pattern_engine
-from audx.project import Project
+
+STEPS_PER_BAR = 16
 
 DASHBOARD = """<!doctype html>
 <html lang="en">
@@ -25,34 +24,64 @@ DASHBOARD = """<!doctype html>
 <title>audx · monitor</title>
 <style>
   :root { color-scheme: dark; }
-  body { font: 14px/1.5 ui-monospace, monospace; background: #08070a; color: #e8dccb; margin: 0; padding: 24px; }
-  h1 { color: #d4a574; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 16px; }
-  .row { display: flex; gap: 12px; margin-bottom: 6px; align-items: center; }
-  .name { width: 110px; color: #7a6e5d; }
-  .bar { background: #14111a; height: 12px; flex: 1; border: 1px solid #2a2330; position: relative; }
-  .fill { background: #d4a574; height: 100%; width: 0; transition: width .08s linear; }
-  .meta { color: #7a6e5d; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; margin-top: 24px; }
+  * { box-sizing: border-box; }
+  body { font: 14px/1.5 ui-monospace,"JetBrains Mono",monospace; background:#0a0a0a; color:#ececea; margin:0; padding:32px; }
+  .frame { max-width: 1000px; margin: 0 auto; border: 1px solid #23231f; padding: 28px 32px; }
+  header { display:flex; justify-content:space-between; align-items:baseline; color:#9a9a95; letter-spacing:2px; margin-bottom:24px; }
+  header .wm { color:#9a9a95; }
+  header .tp { color:#56554f; }
+  .accent { color:#d79a4e; }
+  .grid { display:flex; flex-direction:column; gap:8px; margin-bottom:28px; }
+  .trk { display:flex; align-items:center; height:34px; }
+  .lbl { width:120px; text-align:right; padding-right:18px; color:#9a9a95; }
+  .cells { display:flex; gap:6px; position:relative; }
+  .cell { width:34px; height:34px; border-radius:3px; box-shadow: inset 0 0 0 1px #1f1f1c; }
+  .cell.beat { box-shadow: inset 0 0 0 1px #2e2e29; }
+  .cell.on { background:#ececea; box-shadow:none; }
+  .cell.cur { background:#d79a4e; }
+  .vu { width:90px; height:8px; margin-left:18px; background:#16160f; border:1px solid #23231f; }
+  .vu > div { height:100%; background:#d79a4e; width:0; transition:width .08s linear; }
+  .meta { color:#56554f; font-size:11px; letter-spacing:1px; margin-top:8px; }
+  .empty { color:#56554f; padding: 20px 0; }
 </style>
 </head>
 <body>
-<h1>audx · read-only</h1>
-<div id="head"></div>
-<div id="rows"></div>
-<div class="meta">refreshes every 200 ms · localhost-only · spec §11</div>
+<div class="frame">
+  <header>
+    <span class="wm">audx · monitor</span>
+    <span id="transport" class="tp"></span>
+  </header>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" hidden>no patterns loaded — try <span class="accent">audx open</span></div>
+  <div class="meta">read-only · localhost · refreshes 10x/s</div>
+</div>
 <script>
-const fmt = v => String(v).padStart(3, ' ');
-async function tick() {
-  try {
-    const r = await fetch('/state');
-    const s = await r.json();
-    document.getElementById('head').textContent =
-      `${s.playing ? '▶' : '■'}  ${fmt(s.bpm.toFixed(1))} bpm  ·  bar ${fmt(s.bar+1)}  ·  beat ${fmt(s.beat.toFixed(2))}`;
-    const rows = document.getElementById('rows');
-    rows.innerHTML = s.levels.map((lvl, i) =>
-      `<div class="row"><span class="name">ch ${String(i+1).padStart(2,'0')}</span><div class="bar"><div class="fill" style="width:${Math.min(100, lvl*100).toFixed(1)}%"></div></div></div>`
-    ).join('');
-  } catch (_) {}
-  setTimeout(tick, 200);
+const N = 16;
+function render(s) {
+  document.getElementById('transport').innerHTML =
+    (s.playing ? '▶' : '■') + '  ' + s.bpm.toFixed(1) + ' bpm · bar ' + (s.bar+1) +
+    ' · beat ' + s.beat.toFixed(2);
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('empty');
+  empty.hidden = s.tracks.length > 0;
+  const cur = Math.floor(s.step) % N;
+  grid.innerHTML = s.tracks.map((t) => {
+    const cells = t.steps.map((on, i) => {
+      const cls = ['cell'];
+      if (i % 4 === 0) cls.push('beat');
+      if (on) cls.push('on');
+      if (on && i === cur && s.playing) cls.push('cur');
+      return '<div class="'+cls.join(' ')+'"></div>';
+    }).join('');
+    const lvl = Math.min(100, (s.levels[t.channel]||0)*100).toFixed(1);
+    return '<div class="trk"><span class="lbl">'+t.name+'</span>'+
+           '<div class="cells">'+cells+'</div>'+
+           '<div class="vu"><div style="width:'+lvl+'%"></div></div></div>';
+  }).join('');
+}
+async function tick(){
+  try { const r = await fetch('/state'); render(await r.json()); } catch(_) {}
+  setTimeout(tick, 100);
 }
 tick();
 </script>
@@ -60,403 +89,69 @@ tick();
 </html>
 """
 
-BROWSER_APP = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>audx browser</title>
-<style>
-  :root { color-scheme: dark; --bg:#08070a; --panel:#14111a; --line:#2a2330; --fg:#e8dccb; --muted:#7a6e5d; --accent:#d4a574; --ok:#7fb069; --warn:#c96f53; }
-  * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; background: radial-gradient(900px 520px at 80% -10%, rgba(212,165,116,.08), transparent 62%), var(--bg); color:var(--fg); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  main { max-width:1180px; margin:0 auto; padding:28px; }
-  header { display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:18px; }
-  h1 { margin:0; font-size:22px; color:var(--accent); letter-spacing:.08em; }
-  button, input { font:inherit; }
-  input { accent-color:var(--accent); }
-  button { background:var(--panel); color:var(--fg); border:1px solid var(--line); padding:8px 12px; cursor:pointer; }
-  button:hover { border-color:var(--accent); color:var(--accent); }
-  button.active { border-color:var(--warn); color:var(--warn); }
-  .transport { display:flex; gap:8px; align-items:center; margin:18px 0; flex-wrap:wrap; }
-  .transport label { color:var(--muted); display:flex; gap:8px; align-items:center; }
-  .transport input[type="number"] { width:82px; background:#0e0c10; border:1px solid var(--line); color:var(--fg); padding:7px 8px; }
-  .grid { display:grid; grid-template-columns: 280px repeat(16, minmax(28px, 1fr)); gap:4px; align-items:stretch; }
-  .cell { min-height:28px; border:1px solid var(--line); background:#0e0c10; display:grid; place-items:center; }
-  .hit { background:rgba(212,165,116,.22); color:var(--accent); border-color:rgba(212,165,116,.55); }
-  .now { outline:2px solid var(--ok); outline-offset:-2px; }
-  .track { justify-content:start; padding:8px 10px; color:var(--fg); gap:6px; place-items:stretch; }
-  .track-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .track-name { color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .track-controls { display:grid; grid-template-columns:40px 1fr 40px 1fr; gap:5px; color:var(--muted); font-size:11px; align-items:center; }
-  .track-controls input { min-width:0; width:100%; }
-  .mute { padding:3px 7px; min-width:36px; }
-  .meter { height:6px; background:#0e0c10; border:1px solid var(--line); margin-top:4px; }
-  .fill { width:0%; height:100%; background:var(--ok); }
-  .drop { border:1px dashed var(--line); padding:16px; color:var(--muted); margin-top:18px; }
-  .status { color:var(--muted); margin-top:14px; }
-</style>
-</head>
-<body>
-<main>
-  <header><h1>audx browser</h1><div id="meta">local · Web Audio · no cloud</div></header>
-  <div class="transport">
-    <button id="play">▶ play</button>
-    <button id="stop">■ stop</button>
-    <label>bpm <input id="bpm" type="number" min="40" max="240" step="0.1" value="128" /></label>
-    <button id="save">save</button>
-    <span id="clock">000.0 bpm · bar 001:01</span>
-  </div>
-  <section id="grid" class="grid"></section>
-  <div class="drop"><input id="files" type="file" accept="audio/*" multiple /> Load local samples into the browser session</div>
-  <div class="status" id="status">ready</div>
-</main>
-<script>
-const params = new URLSearchParams(location.search);
-const projectPath = params.get('project') || 'project.audx';
-const state = { project:null, ctx:null, buffers:new Map(), playing:false, step:0, timer:null, bpm:128, dirty:false };
 
-function parseGrid(dsl) {
-  const m = dsl.match(/\\[([^\\]]+)\\]/);
-  if (m) return [...m[1]].filter(ch => '10xX.-'.includes(ch)).map(ch => ch === '1' || ch.toLowerCase() === 'x');
-  if (dsl.includes('4/4')) return [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0].map(Boolean);
-  if (dsl.includes('2/8')) return [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0].map(Boolean);
-  if (dsl.includes('16x8')) return [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0].map(Boolean);
-  return [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0].map(Boolean);
-}
-
-function ensureMixer(pattern) {
-  state.project.mixer ||= [];
-  let row = state.project.mixer.find(item => item.channel === pattern.channel);
-  if (!row) {
-    row = { channel: pattern.channel, name: pattern.name, gain_db: 0, pan: 0, mute: false, solo: false };
-    state.project.mixer.push(row);
-  }
-  row.gain_db ??= 0;
-  row.pan ??= 0;
-  row.mute ??= false;
-  row.name ||= pattern.name;
-  return row;
-}
-
-function gridToDsl(pattern, cells) {
-  const grid = cells.map(on => on ? '1' : '0').join('');
-  if (pattern.dsl.includes('[') && pattern.dsl.includes(']')) {
-    return pattern.dsl.replace(/\\[[^\\]]*\\]/, `[${grid}]`);
-  }
-  return `${pattern.name} [${grid}] | channel ${pattern.channel ?? 0}`;
-}
-
-function updateStatus(text) {
-  document.getElementById('status').textContent = text;
-}
-
-function markDirty(reason='edited') {
-  state.dirty = true;
-  document.getElementById('save').classList.add('active');
-  updateStatus(`${reason} · unsaved`);
-}
-
-function render() {
-  const grid = document.getElementById('grid');
-  const patterns = state.project?.patterns || [];
-  grid.innerHTML = '<div></div>' + Array.from({length:16}, (_,i)=>`<div class="cell">${String(i+1).padStart(2,'0')}</div>`).join('');
-  patterns.forEach((p, row) => {
-    const cells = parseGrid(p.dsl);
-    const mixer = ensureMixer(p);
-    grid.insertAdjacentHTML('beforeend', `
-      <div class="cell track">
-        <div class="track-head">
-          <span class="track-name">${p.name}</span>
-          <button class="mute ${mixer.mute ? 'active' : ''}" data-control="mute" data-row="${row}">M</button>
-        </div>
-        <div class="track-controls">
-          <span>gain</span><input type="range" min="-36" max="6" step="0.5" value="${mixer.gain_db}" data-control="gain" data-row="${row}" />
-          <span>pan</span><input type="range" min="-1" max="1" step="0.05" value="${mixer.pan}" data-control="pan" data-row="${row}" />
-        </div>
-        <div class="meter"><div class="fill" id="m${row}"></div></div>
-      </div>`);
-    cells.forEach((on, i) => grid.insertAdjacentHTML('beforeend', `<button class="cell ${on ? 'hit' : ''}" data-row="${row}" data-step="${i}">${on ? '█' : '·'}</button>`));
-  });
-}
-
-async function ensureAudio() {
-  if (!state.ctx) state.ctx = new AudioContext();
-  if (state.ctx.state === 'suspended') await state.ctx.resume();
-}
-
-async function loadProject() {
-  const res = await fetch('/api/project?path=' + encodeURIComponent(projectPath));
-  state.project = await res.json();
-  state.bpm = state.project.bpm || 128;
-  document.getElementById('bpm').value = state.bpm.toFixed(1);
-  document.getElementById('meta').textContent = `${state.project.name} · ${state.bpm.toFixed(1)} bpm`;
-  render();
-  for (const row of state.project.mixer || []) {
-    if (row.sample) {
-      try {
-        const audio = await fetch('/api/audio?path=' + encodeURIComponent((state.project.root + '/' + row.sample))).then(r => r.arrayBuffer());
-        state.buffers.set(row.sample, await (state.ctx || new AudioContext()).decodeAudioData(audio.slice(0)));
-      } catch (err) {
-        console.warn('sample load failed', row.sample, err);
-      }
-    }
-  }
-  updateStatus('project loaded');
-}
-
-function trigger(pattern, rowIndex) {
-  const mixer = (state.project.mixer || []).find(row => row.channel === pattern.channel);
-  if (mixer?.mute) return;
-  const key = mixer?.sample;
-  const buffer = key ? state.buffers.get(key) : null;
-  const gainValue = Math.max(0, Math.min(1.2, 0.75 * Math.pow(10, ((mixer?.gain_db || 0) / 20))));
-  const panValue = Math.max(-1, Math.min(1, mixer?.pan || 0));
-  if (!state.ctx) return;
-  if (buffer) {
-    const src = state.ctx.createBufferSource();
-    const gain = state.ctx.createGain();
-    const pan = state.ctx.createStereoPanner();
-    gain.gain.value = gainValue;
-    src.buffer = buffer;
-    pan.pan.value = panValue;
-    src.connect(gain).connect(pan).connect(state.ctx.destination);
-    src.start();
-  } else {
-    const osc = state.ctx.createOscillator();
-    const gain = state.ctx.createGain();
-    const pan = state.ctx.createStereoPanner();
-    osc.frequency.value = rowIndex === 0 ? 72 : 220 + rowIndex * 40;
-    pan.pan.value = panValue;
-    gain.gain.setValueAtTime(0.14 * gainValue, state.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, state.ctx.currentTime + 0.12);
-    osc.connect(gain).connect(pan).connect(state.ctx.destination);
-    osc.start();
-    osc.stop(state.ctx.currentTime + 0.13);
-  }
-}
-
-function toggleStep(rowIndex, stepIndex) {
-  const pattern = state.project.patterns[rowIndex];
-  const cells = parseGrid(pattern.dsl);
-  cells[stepIndex] = !cells[stepIndex];
-  pattern.dsl = gridToDsl(pattern, cells);
-  render();
-  markDirty(`${pattern.name} step ${stepIndex + 1}`);
-}
-
-function updateMixer(rowIndex, control, value) {
-  const pattern = state.project.patterns[rowIndex];
-  const mixer = ensureMixer(pattern);
-  if (control === 'gain') mixer.gain_db = Number(value);
-  if (control === 'pan') mixer.pan = Number(value);
-  if (control === 'mute') mixer.mute = !mixer.mute;
-  render();
-  markDirty(`${pattern.name} ${control}`);
-}
-
-async function saveProject() {
-  state.project.bpm = Number(document.getElementById('bpm').value) || state.bpm;
-  const res = await fetch('/api/project', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: projectPath, project: state.project }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  await res.json();
-  state.bpm = state.project.bpm;
-  state.dirty = false;
-  document.getElementById('save').classList.remove('active');
-  document.getElementById('meta').textContent = `${state.project.name} · ${state.bpm.toFixed(1)} bpm`;
-  updateStatus('saved');
-}
-
-async function play() {
-  await ensureAudio();
-  state.playing = true;
-  const interval = (60 / state.bpm / 4) * 1000;
-  clearInterval(state.timer);
-    state.timer = setInterval(() => {
-    document.querySelectorAll('.now').forEach(el => el.classList.remove('now'));
-    document.querySelectorAll(`[data-step="${state.step}"]`).forEach(el => el.classList.add('now'));
-    (state.project.patterns || []).forEach((pattern, row) => {
-      if (parseGrid(pattern.dsl)[state.step]) trigger(pattern, row);
-      const meter = document.getElementById('m' + row);
-      if (meter) { meter.style.width = parseGrid(pattern.dsl)[state.step] ? '90%' : '8%'; setTimeout(()=>meter.style.width='0%', 90); }
-    });
-    document.getElementById('clock').textContent = `${state.bpm.toFixed(1).padStart(5,'0')} bpm · step ${String(state.step+1).padStart(2,'0')}`;
-    state.step = (state.step + 1) % 16;
-  }, interval);
-}
-
-function stop() { state.playing = false; clearInterval(state.timer); state.step = 0; }
-document.getElementById('play').onclick = play;
-document.getElementById('stop').onclick = stop;
-document.getElementById('save').onclick = () => saveProject().catch(err => updateStatus(String(err)));
-document.getElementById('bpm').oninput = event => {
-  state.bpm = Number(event.target.value) || state.bpm;
-  if (state.project) state.project.bpm = state.bpm;
-  markDirty('tempo');
-};
-document.getElementById('grid').onclick = event => {
-  const target = event.target.closest('[data-step],[data-control]');
-  if (!target) return;
-  const row = Number(target.dataset.row);
-  if (target.dataset.step !== undefined) toggleStep(row, Number(target.dataset.step));
-  if (target.dataset.control) updateMixer(row, target.dataset.control, target.value);
-};
-document.getElementById('grid').oninput = event => {
-  const target = event.target.closest('[data-control]');
-  if (!target || target.dataset.control === 'mute') return;
-  updateMixer(Number(target.dataset.row), target.dataset.control, target.value);
-};
-document.getElementById('files').onchange = async (event) => {
-  await ensureAudio();
-  for (const file of event.target.files) {
-    const audio = await file.arrayBuffer();
-    state.buffers.set(file.name, await state.ctx.decodeAudioData(audio));
-  }
-  document.getElementById('status').textContent = `loaded ${event.target.files.length} browser file(s)`;
-};
-loadProject().catch(err => document.getElementById('status').textContent = String(err));
-</script>
-</body>
-</html>
-"""
+def _step_grid(pattern: object) -> list[int]:
+    grid = [0] * STEPS_PER_BAR
+    for step in getattr(pattern, "steps", []):
+        idx = round(step.beat * 4) % STEPS_PER_BAR
+        grid[idx] = 1
+    return grid
 
 
-def _state() -> dict[str, Any]:
+def _state() -> dict:
     pe = get_pattern_engine()
     engine = get_engine()
-    levels: list[float] = [float(level) for level in engine.get_channel_levels()] if engine else []
+    levels: list[float] = list(engine.get_channel_levels()) if engine else []
     return {
         "bpm": float(pe.bpm),
         "bar": int(pe.current_bar),
         "beat": float(pe.current_beat),
+        "step": float(pe.current_beat * 4.0),
         "playing": bool(pe.running),
-        "levels": levels,
-        "patterns": [
-            {"name": name, "dsl": pattern.dsl, "channel": pattern.channel}
+        "levels": [float(level) for level in levels],
+        "tracks": [
+            {"name": name, "channel": int(pattern.channel), "steps": _step_grid(pattern)}
             for name, pattern in pe.patterns.items()
         ],
     }
 
 
 class _Handler(BaseHTTPRequestHandler):
-    def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+    def _send(self, body: bytes, content_type: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path in ("/", "/index.html"):
-            body = DASHBOARD.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        if self.path in ("/", "/index.html"):
+            self._send(DASHBOARD.encode("utf-8"), "text/html; charset=utf-8")
             return
-        if parsed.path == "/app":
-            body = BROWSER_APP.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if parsed.path == "/api/project":
-            params = parse_qs(parsed.query)
-            project_path = Path(params.get("path", ["project.audx"])[0]).expanduser()
-            if not project_path.exists():
-                self.send_error(404, "project not found")
-                return
-            project = Project.load(project_path)
-            payload = {
-                "root": str(project_path.parent),
-                "name": project.name,
-                "bpm": project.bpm,
-                "time_sig": project.time_sig,
-                "patterns": project.patterns,
-                "mixer": project.mixer,
-            }
-            self._send_json(payload)
-            return
-        if parsed.path == "/api/audio":
-            params = parse_qs(parsed.query)
-            audio_path = Path(params.get("path", [""])[0]).expanduser()
-            if not audio_path.exists() or not audio_path.is_file():
-                self.send_error(404, "audio not found")
-                return
-            body = audio_path.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "audio/wav")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if parsed.path == "/state":
-            self._send_json(_state())
+        if self.path == "/state":
+            self._send(json.dumps(_state()).encode("utf-8"), "application/json")
             return
         self.send_error(404)
-
-    def do_POST(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path != "/api/project":
-            self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length", "0"))
-        try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            project_path = Path(str(payload["path"])).expanduser()
-            incoming = payload["project"]
-            if not isinstance(incoming, dict):
-                raise ValueError("project payload must be an object")
-            if project_path.suffix != ".audx":
-                raise ValueError("project path must end with .audx")
-            existing = Project.load(project_path) if project_path.exists() else Project(name=project_path.stem)
-            existing.name = str(incoming.get("name", existing.name))
-            existing.bpm = float(incoming.get("bpm", existing.bpm))
-            existing.time_sig = str(incoming.get("time_sig", existing.time_sig))
-            existing.patterns = _coerce_list(incoming.get("patterns", existing.patterns), "patterns")
-            existing.mixer = _coerce_list(incoming.get("mixer", existing.mixer), "mixer")
-            existing.slots = incoming.get("slots", existing.slots) if isinstance(incoming.get("slots", existing.slots), dict) else existing.slots
-            existing.active_slot = str(incoming.get("active_slot", existing.active_slot))
-            existing.finisher = incoming.get("finisher", existing.finisher) if isinstance(incoming.get("finisher", existing.finisher), dict) else existing.finisher
-            existing.save(project_path)
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            self._send_json({"ok": False, "error": str(exc)}, status=400)
-            return
-        except FileNotFoundError as exc:
-            self._send_json({"ok": False, "error": str(exc)}, status=404)
-            return
-        self._send_json({"ok": True, "path": str(project_path)})
 
     def log_message(self, *args: object) -> None:  # silence default access logs
         return
 
 
-def _coerce_list(value: Any, name: str) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ValueError(f"{name} must be a list")
-    result: list[dict[str, Any]] = []
-    for item in value:
-        if not isinstance(item, dict):
-            raise ValueError(f"{name} entries must be objects")
-        result.append(dict(item))
-    return result
+def serve_in_background(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
+    """Start the dashboard server in a daemon thread and return the server.
+
+    Used to embed the dashboard inside a running process (e.g. the TUI) so it
+    reflects that process's live session. Caller keeps the returned server alive.
+    """
+    httpd = ThreadingHTTPServer((host, port), _Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd
 
 
 def serve(host: str = "127.0.0.1", port: int = 8080) -> None:
-    """Serve the dashboard until KeyboardInterrupt."""
-    httpd = ThreadingHTTPServer((host, port), _Handler)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    """Serve the dashboard until KeyboardInterrupt (standalone `audx serve`)."""
+    httpd = serve_in_background(host, port)
     try:
-        thread.join()
+        threading.Event().wait()
     except KeyboardInterrupt:
         httpd.shutdown()

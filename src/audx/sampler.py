@@ -16,9 +16,6 @@ def get_sample_library() -> SampleLibrary:
         from audx.config import SAMPLES_DIR
 
         _global_library = SampleLibrary(SAMPLES_DIR)
-        _global_library.load_index()
-        if len(_global_library.samples) == 0:
-            _global_library.auto_scan_hd()
     return _global_library
 
 
@@ -54,49 +51,37 @@ class SampleLibrary:
         return self.samples
 
     def auto_scan_hd(self) -> dict[str, int]:
-        """Automatically scan standard user audio directories across the system."""
         from audx.config import HOME
 
-        home = HOME
         target_dirs = [
             self.root,
-            home / "Music",
-            home / "Downloads",
-            home / "Samples",
-            home / "Documents",
-            Path("/Users/Shared"),
+            HOME / "Music",
+            HOME / "Downloads",
+            HOME / "Samples",
+            HOME / "Documents",
         ]
         extensions = {".wav", ".mp3", ".flac", ".ogg", ".aiff", ".aif"}
         count = 0
-        categories: dict[str, int] = {}
         for directory in target_dirs:
             if not directory.exists() or not directory.is_dir():
                 continue
             for path in directory.rglob("*"):
                 if not path.is_file() or path.suffix.lower() not in extensions:
                     continue
-                try:
-                    rel = str(path)
-                    if rel in self.samples:
-                        continue
-                    tags = self._extract_tags(path.stem)
-                    self.samples[rel] = {
-                        "path": str(path),
-                        "name": path.name,
-                        "duration": 1.0,
-                        "sr": 48000,
-                        "channels": 2,
-                        "tags": tags,
-                    }
-                    count += 1
-                    for tag in tags:
-                        self.samples_by_tag.setdefault(tag, []).append(rel)
-                        categories[tag] = categories.get(tag, 0) + 1
-                except Exception:
+                rel = str(path)
+                if rel in self.samples:
                     continue
-        if count > 0:
-            self.save_index()
-        return {"total": count, **categories}
+                tags = self._extract_tags(path.stem)
+                self.samples[rel] = {
+                    "path": str(path),
+                    "name": path.name,
+                    "duration": 1.0,
+                    "sr": 44100,
+                    "channels": 2,
+                    "tags": tags,
+                }
+                count += 1
+        return {"total": len(self.samples)}
 
     def build_index(self, recursive: bool = True) -> dict[str, dict]:
         self.samples = {}
@@ -178,21 +163,11 @@ class SampleLibrary:
     def resolve(self, sample_name: str) -> Path | None:
         if not self.samples:
             self.load_index()
-        target = Path(sample_name)
-        if target.is_absolute() and target.exists():
-            return target
         query = sample_name.lower()
         for meta in self.samples.values():
-            if meta["name"].lower() == query or Path(meta["name"]).stem.lower() == query or meta["path"].lower() == query:
-                p = Path(meta["path"])
-                if p.exists():
-                    return p
+            if meta["name"].lower() == query or Path(meta["name"]).stem.lower() == query:
+                return Path(meta["path"])
         matches = self.search(query=sample_name, limit=1)
         if matches:
-            p = Path(matches[0]["path"])
-            if p.exists():
-                return p
-        rel_path = self.root / sample_name
-        if rel_path.exists():
-            return rel_path
+            return Path(matches[0]["path"])
         return None
