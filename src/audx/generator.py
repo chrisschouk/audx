@@ -45,34 +45,34 @@ def generate_track(genre: Genre = Genre.TECHNO, library: SampleLibrary | None = 
             Pattern(name="kick", dsl=f"{kick_name} 4/4 | channel 0 | gain 0dB", channel=0),
             Pattern(name="snare", dsl=f"{snare_name} 2/8 | channel 1 | vel 0.85 | gain -2dB", channel=1),
             Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | vel 0.6 | swing 10%", channel=2),
-            Pattern(name="sub", dsl=f"{bass_name} [x--- -x-- --x- ---x] | channel 3 | gain -3dB", channel=3),
+            Pattern(name="sub", dsl=f"{bass_name} 4/4 | channel 3 | gain -3dB", channel=3),
         ]
     elif genre == Genre.HOUSE:
         patterns = [
             Pattern(name="kick", dsl=f"{kick_name} 4/4 | channel 0", channel=0),
             Pattern(name="clap", dsl=f"{snare_name} 2/8 | channel 1 | vel 0.9", channel=1),
             Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 54% | vel 0.7", channel=2),
-            Pattern(name="bass", dsl=f"{bass_name} [x--x --x- -x-- x---] | channel 3", channel=3),
+            Pattern(name="bass", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     elif genre == Genre.HIPHOP:
         patterns = [
-            Pattern(name="kick", dsl=f"{kick_name} [x--- --x- -x-- ----] | channel 0", channel=0),
+            Pattern(name="kick", dsl=f"{kick_name} 2/4 | channel 0", channel=0),
             Pattern(name="snare", dsl=f"{snare_name} 2/8 | channel 1 | humanize 12%", channel=1),
             Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 48% | chance 90%", channel=2),
-            Pattern(name="bass", dsl=f"{bass_name} [x--- ---- x--- ----] | channel 3", channel=3),
+            Pattern(name="bass", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     elif genre == Genre.UKG:
         patterns = [
-            Pattern(name="kick", dsl=f"{kick_name} [x--- --x- ---x ----] | channel 0", channel=0),
+            Pattern(name="kick", dsl=f"{kick_name} 4/4 | channel 0", channel=0),
             Pattern(name="snare", dsl=f"{snare_name} 2/8 | channel 1 | vel 0.95", channel=1),
-            Pattern(name="skip_hats", dsl=f"{hat_name} [-x-x x-x- -x-x x-x-] | channel 2 | swing 60%", channel=2),
-            Pattern(name="sub", dsl=f"{bass_name} [--x- ---- --x- ----] | channel 3", channel=3),
+            Pattern(name="skip_hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 60%", channel=2),
+            Pattern(name="sub", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     else:  # AMBIENT
         patterns = [
-            Pattern(name="pulse", dsl=f"{kick_name} [x--- ---- ---- ----] | channel 0 | gain -4dB", channel=0),
-            Pattern(name="echo_hat", dsl=f"{hat_name} [---- x--- ---- x---] | channel 1 | chance 70%", channel=1),
-            Pattern(name="pad", dsl=f"{bass_name} [x--- ---- ---- ----] | channel 2 | gain -6dB", channel=2),
+            Pattern(name="pulse", dsl=f"{kick_name} 1/4 | channel 0 | gain -4dB", channel=0),
+            Pattern(name="echo_hat", dsl=f"{hat_name} 4x8 | channel 1 | chance 70%", channel=1),
+            Pattern(name="pad", dsl=f"{bass_name} 1/4 | channel 2 | gain -6dB", channel=2),
         ]
 
     for p in patterns:
@@ -82,11 +82,9 @@ def generate_track(genre: Genre = Genre.TECHNO, library: SampleLibrary | None = 
 
 
 def _find_sample(library: SampleLibrary | None, tag: str) -> str | None:
-    from typing import cast
-
     if library is None:
         return None
     matches = library.search(tag, limit=1)
     if matches:
-        return cast(str, matches[0]["name"])
+        return tag
     return None
