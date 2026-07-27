@@ -274,26 +274,33 @@ def jam_command(
                 with mido.open_input(push_in_name) as port:
                     for msg in port:
                         if msg.type == "note_on" and msg.velocity > 0:
-                            if msg.note == 85:
+                            # Push 2 Capacitive Encoder Touch Sensors (Notes 0..11) - DO NOT play voice sample!
+                            if 0 <= msg.note <= 11:
+                                continue
+
+                            if msg.note == 85:  # Play button
                                 get_pattern_engine().start()
                                 continue
-                            elif msg.note == 86:
+                            elif msg.note == 86:  # Stop button
                                 get_pattern_engine().stop()
                                 continue
-                            elif 20 <= msg.note <= 27:
+                            elif 20 <= msg.note <= 27:  # Track Mute buttons 1..8
                                 ch_idx = msg.note - 20
                                 eng = get_engine()
                                 if eng and ch_idx < eng.channels:
                                     eng.set_channel_mute(ch_idx, not eng.channel_mute[ch_idx])
                                 continue
 
+                            # Drum Pads (36..99)
                             sample_name, ch = _get_midi_note_sample(msg.note)
-                            scaled_gain = 0.6 + 0.4 * (msg.velocity / 127.0)
+                            # True velocity sensitivity (0.01..1.0 gain)
+                            scaled_gain = msg.velocity / 127.0
                             eng = get_engine()
                             if eng:
                                 eng.trigger_hit(sample_name, channel=ch, velocity=scaled_gain)
                             active_hits[sample_name] = time.time()
                         elif msg.type == "control_change":
+                            # Encoders 1..4 (CC 71..74) -> Channel 0..3 Gain / Volume
                             if 71 <= msg.control <= 74:
                                 ch_idx = msg.control - 71
                                 delta = 0.05 if msg.value < 64 else -0.05
@@ -308,7 +315,7 @@ def jam_command(
                                 if eng and ch_idx < eng.channels:
                                     cur_pan = float(eng.channel_pan[ch_idx])
                                     eng.set_channel_pan(ch_idx, max(-1.0, min(1.0, cur_pan + delta)))
-                            elif msg.control == 14:
+                            elif msg.control == 14:  # Tempo Encoder
                                 delta_bpm = 1.0 if msg.value < 64 else -1.0
                                 cur_bpm = get_pattern_engine().bpm
                                 get_pattern_engine().set_bpm(max(40.0, min(240.0, cur_bpm + delta_bpm)))
