@@ -211,12 +211,43 @@ def jam_command(
     for p in patterns:
         console.print(f"  • [yellow]{p.name}[/yellow]: [dim]{p.dsl}[/dim]")
 
-    from audx.push2 import find_push2_output, light_push2_pads
+    from audx.push2 import find_push2_input, find_push2_output, light_push2_pads
 
     push_out = find_push2_output()
     if push_out:
         if light_push2_pads(push_out):
             console.print(f"  [bold green]✓ Push 2 pad LEDs illuminated on '{push_out}'[/bold green]")
+
+    push_in_name = find_push2_input()
+    if push_in_name:
+        import threading
+
+        console.print(f"  [bold green]✓ Listening for Push 2 pad hits on '{push_in_name}'[/bold green]")
+
+        def _push2_listener() -> None:
+            try:
+                import mido
+
+                with mido.open_input(push_in_name) as port:
+                    for msg in port:
+                        if msg.type == "note_on" and msg.velocity > 0:
+                            note_map = {
+                                36: ("kick", 0),
+                                37: ("snare", 1),
+                                38: ("hh", 2),
+                                39: ("clap", 1),
+                                40: ("perc", 3),
+                            }
+                            sample_name, ch = note_map.get(msg.note, (f"C{2 + (msg.note % 12)//3}", 3))
+                            eng = get_engine()
+                            if eng:
+                                eng.trigger_hit(sample_name, channel=ch, velocity=msg.velocity / 127.0)
+                            console.print(f"  [bold cyan]⚡ Push 2 Pad Hit![/bold cyan] note={msg.note} ([yellow]{sample_name}[/yellow]) vel={msg.velocity}")
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_push2_listener, daemon=True)
+        t.start()
 
     try:
         eng = init_engine()

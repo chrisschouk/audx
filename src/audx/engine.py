@@ -86,6 +86,10 @@ class AudioEngine:
             sample_voice: Voice
             if sample_path and sample_path.exists():
                 sample_voice = SampleVoice(str(sample_path), channel=ch, gain=velocity, pan=0.0)
+                if not sample_voice.is_active:
+                    from audx.audio.synth import SynthVoice
+
+                    sample_voice = SynthVoice(step.sample, channel=ch, gain=velocity, pan=0.0, sample_rate=self.sample_rate)
             else:
                 from audx.audio.synth import SynthVoice
 
@@ -110,6 +114,25 @@ class AudioEngine:
         mono = np.sum(self.mix_buffer, axis=0) * self.master_level
         outdata[:, 0] = mono * 0.7
         outdata[:, 1] = mono * 0.7
+
+    def trigger_hit(self, sample_name: str, channel: int = 0, velocity: float = 1.0) -> None:
+        """Trigger an immediate sample or synth hit on a channel (e.g. from Push 2 pad)."""
+        ch = max(0, min(int(channel), self.channels - 1))
+        sample_path = self.sample_library.resolve(sample_name)
+        sample_voice: Voice
+        if sample_path and sample_path.exists():
+            sample_voice = SampleVoice(str(sample_path), channel=ch, gain=velocity, pan=0.0)
+            if not sample_voice.is_active:
+                from audx.audio.synth import SynthVoice
+
+                sample_voice = SynthVoice(sample_name, channel=ch, gain=velocity, pan=0.0, sample_rate=self.sample_rate)
+        else:
+            from audx.audio.synth import SynthVoice
+
+            sample_voice = SynthVoice(sample_name, channel=ch, gain=velocity, pan=0.0, sample_rate=self.sample_rate)
+
+        with self.lock:
+            self.active_voices.append(sample_voice)
 
     def _stream_finished(self):
         self.running = False
