@@ -215,7 +215,7 @@ bass e(5,16) | tune -7st</textarea>
         pyodide = await loadPyodide();
         setStatus("loading numpy…");
         await pyodide.loadPackage("numpy");
-        setStatus("loading the audx synth kit…");
+        setStatus("loading synth…");
         for (const f of ["pattern.py", "synth.py", "webrender.py"]) {
           const code = await (await fetch("audx_web/" + f)).text();
           pyodide.FS.writeFile(f, code);
