@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>audx — code your music, own your sound</title>
-  <meta name="description" content="A terminal-native digital audio workstation. Pattern sequencing, a built-in synth kit, and live-coded playback — calm, local, hackable." />
+  <title>audx — write a beat, hear it, export it</title>
+  <meta name="description" content="audx is a pattern sequencer with a built-in synth. Type rhythm as text, play it in the browser or terminal, export to Ableton. Local. No account." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,7 +19,7 @@
   <header class="hero">
     <h1 class="wordmark">audx</h1>
     <p class="hero-line">
-      Terminal-native DAW. Pattern sequencing, a built-in synth kit, live-coded playback — local, hackable, no cloud.
+      Write a beat as text. Play it. Export when you’re done.
     </p>
     <div class="cta-row">
       <a class="btn-primary" href="studio.html">Open studio</a>
@@ -40,17 +40,16 @@
 
   <main class="landing-main">
     <section class="landing-section">
-      <h2>Patterns</h2>
-      <pre class="pattern-block"><code><span class="cm"># rhythm as text</span>
+      <h2>Language</h2>
+      <pre class="pattern-block"><code><span class="cm"># kick every beat · hats with swing · a low sub</span>
 kick 4/4
 clap 2/8
 hh 16x8 | swing 12%
-sub e(3,8) | tune -5st
-<span class="ok">→ same synth the CLI uses</span></code></pre>
+sub e(3,8) | tune -5st</code></pre>
     </section>
 
     <section class="landing-section">
-      <h2>Install</h2>
+      <h2>Terminal</h2>
       <pre class="install-block"><code><span class="prompt">$</span> pip install "git+https://github.com/chrisschouk/audx.git"
 <span class="prompt">$</span> audx demo loop.wav</code></pre>
     </section>

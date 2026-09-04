@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>audx — play</title>
-  <meta name="description" content="Type a pattern, hear it. The real audx synth kit and pattern language, running in your browser via Pyodide." />
+  <title>audx — type a pattern</title>
+  <meta name="description" content="Type a rhythm, hit play. Same synth and pattern language as the audx CLI — running in your browser." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -166,7 +166,7 @@
   <main class="play">
     <a class="back" href="index.html">← audx</a>
     <h1>play</h1>
-    <p class="sub">Type a pattern, hit play. The real audx synth and DSL — local in your browser via Pyodide. Nothing leaves your machine.</p>
+    <p class="sub">Type a line. Hit play. Same synth as the terminal — right here in the browser.</p>
 
     <div class="editor">
       <textarea id="code" spellcheck="false">kick 4/4
@@ -183,16 +183,14 @@ bass e(5,16) | tune -7st</textarea>
     </div>
 
     <div class="presets" id="presets"></div>
-    <div class="status" id="status">loading audx… (first load pulls Pyodide, ~10s)</div>
+    <div class="status" id="status">loading… (~10s first time)</div>
 
     <p class="hint">
-      One pattern per line. Voices: <code>kick snare clap hh oh rim tom cowbell
-      perc ride crash shaker sub bass pluck stab keys saw sine</code>.
-      Modifiers: <code>| vel 0.5</code>, <code>| swing 12%</code>,
-      <code>| tune -7st</code>, <code>| humanize 8%</code>, <code>| chance 70%</code>.
-      Rhythms: <code>4/4</code>, <code>16x8</code>, <code>e(5,16,2)</code>,
-      <code>[1.0.1.0]</code>. Full reference on
-      <a href="https://github.com/chrisschouk/audx/blob/main/docs/pattern-language.md">GitHub</a>.
+      One pattern per line.
+      Voices: <code>kick snare clap hh oh rim tom cowbell perc ride crash shaker sub bass pluck stab keys saw sine</code>.
+      Add <code>| swing 12%</code>, <code>| tune -7st</code>, <code>| chance 70%</code>.
+      Rhythms: <code>4/4</code>, <code>16x8</code>, <code>e(5,16,2)</code>, <code>[1.0.1.0]</code>.
+      <a href="https://github.com/chrisschouk/audx/blob/main/docs/pattern-language.md">Full reference</a>.
     </p>
   </main>
 
@@ -232,7 +230,7 @@ _render`);
         $("play").disabled = false;
         setStatus("ready — hit <span class='accent'>play</span>.");
       } catch (e) {
-        setStatus("couldn't load the runtime: " + e);
+        setStatus("couldn't load: " + e);
       }
     }
 
@@ -265,7 +263,7 @@ _render`);
       current.loop = true;
       current.connect(ctx.destination);
       current.start();
-      setStatus("playing — looping. <span class='accent'>edit and hit play again.</span>");
+      setStatus("playing. <span class='accent'>edit and hit play again.</span>");
     }
 
     function stop() {

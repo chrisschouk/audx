@@ -2,7 +2,7 @@
 
 # audx
 
-A terminal-native digital audio workstation for pattern sequencing, live-coded sample playback, and Ableton session export. Built for a calm, local, hackable workflow with zero cloud dependency.
+Write a beat as text. Play it. Export when you’re done.
 
 **v0.3 experimental** — core music tools work; some advanced CLI surfaces are still experimental.
 
@@ -12,22 +12,21 @@ A terminal-native digital audio workstation for pattern sequencing, live-coded s
 
 </div>
 
-## Try it in the browser (no install)
+## Browser (no install)
 
-Open **[audx studio](https://audx-five.vercel.app/studio.html)** — build a groove with the real synth kit, export WAV/stems, or share a link. Web MIDI / Push 2 works best in Chromium.
+**[Studio](https://audx-five.vercel.app/studio.html)** — step sequencer, synth kit, WAV / stems / share link. MIDI works best in Chrome.
 
-Or open the **[pattern playground](https://audx-five.vercel.app/play.html)** and type DSL like `kick 4/4`.
+**[Play](https://audx-five.vercel.app/play.html)** — type `kick 4/4` and hit play.
 
 ---
 
-## Terminal quickstart
+## Terminal
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install "git+https://github.com/chrisschouk/audx.git"
 
-# Offline proof — no samples, no audio hardware required
 audx doctor
 audx demo loop.wav
 ```
