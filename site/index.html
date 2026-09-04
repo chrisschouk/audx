@@ -11,7 +11,7 @@
   <header class="hero">
     <nav class="nav">
       <span class="brand">audx</span>
-      <a class="nav-link" href="https://github.com/totalaudiopromo/audx">GitHub ↗</a>
+      <a class="nav-link" href="https://github.com/chrisschouk/audx">GitHub ↗</a>
     </nav>
 
     <div class="hero-inner">
@@ -22,12 +22,18 @@
         hackable. No cloud. No mouse. No lock-in.
       </p>
 
-      <div class="terminal" aria-label="quick start">
+      <p style="margin-top:0.4rem; display:flex; gap:0.7rem; flex-wrap:wrap">
+        <a class="button" href="studio.html">▶ open the studio</a>
+        <a class="button" href="play.html">type a pattern</a>
+      </p>
+      <p class="subtle" style="margin-top:0.9rem">Try it in the browser — no install. Chromium recommended for Web MIDI.</p>
+
+      <div class="terminal" aria-label="quick start" style="margin-top:1.8rem">
         <div class="terminal-bar">
           <span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span>
-          <span class="terminal-title">make a beat in 10 seconds</span>
+          <span class="terminal-title">or make a beat from your terminal</span>
         </div>
-        <pre class="terminal-body"><code><span class="prompt">$</span> <span class="cmd">pip install audx</span>
+        <pre class="terminal-body"><code><span class="prompt">$</span> <span class="cmd">pip install "git+https://github.com/chrisschouk/audx.git"</span>
 <span class="prompt">$</span> <span class="cmd">audx demo loop.wav</span>
   audx · demo
     <span class="note">♪ kick     kick 4/4</span>
@@ -37,10 +43,6 @@
   <span class="ok">✓ rendered 4 bars @ 124 BPM → loop.wav</span></code></pre>
       </div>
       <p class="subtle">No samples. No audio hardware. No config. Just sound.</p>
-      <p style="margin-top:1.6rem; display:flex; gap:0.7rem; flex-wrap:wrap">
-        <a class="button" href="studio.html">▶ open the studio</a>
-        <a class="button" href="play.html">type a pattern</a>
-      </p>
     </div>
   </header>
 
@@ -102,14 +104,14 @@
 
     <section class="cta">
       <h2>Open a terminal. Hit play.</h2>
-      <pre class="cta-cmd"><code><span class="prompt">$</span> <span class="cmd">pip install audx &amp;&amp; audx demo loop.wav</span></code></pre>
-      <a class="button" href="https://github.com/totalaudiopromo/audx">Read the docs on GitHub ↗</a>
+      <pre class="cta-cmd"><code><span class="prompt">$</span> <span class="cmd">pip install "git+https://github.com/chrisschouk/audx.git" &amp;&amp; audx demo loop.wav</span></code></pre>
+      <a class="button" href="https://github.com/chrisschouk/audx">Read the docs on GitHub ↗</a>
     </section>
   </main>
 
   <footer>
     <p class="philosophy">Code is the controller. Sound is the canvas. Terminal is the dimension.</p>
-    <p class="copyright">MIT © Chris Schofield · <a href="https://github.com/totalaudiopromo/audx">totalaudiopromo/audx</a></p>
+    <p class="copyright">MIT © Chris Schofield · <a href="https://github.com/chrisschouk/audx">chrisschouk/audx</a> · v0.3 experimental</p>
   </footer>
 </body>
 </html>

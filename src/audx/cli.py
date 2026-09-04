@@ -296,10 +296,12 @@ def jam(
         False, "--chromatic", help="Play one melodic voice across the keys (vs. drum pads)"
     ),
     voice: str = typer.Option("keys", "--voice", help="Melodic voice for --chromatic mode"),
-    bpm: float = typer.Option(124.0, "--bpm", help="Engine tempo"),
+    bpm: float = typer.Option(124.0, "--bpm", help="Engine tempo (overridden by --genre preset tempo)"),
     no_lights: bool = typer.Option(False, "--no-lights", help="Don't light Push 2 pads"),
     once: bool = typer.Option(False, "--once", help="Run jam loop once and exit"),
-    genre: str | None = typer.Option(None, "--genre", help="Genre preset"),
+    genre: str | None = typer.Option(
+        None, "--genre", help="Load a genre pattern pack: techno|house|hiphop|ukg|ambient"
+    ),
 ) -> None:
     """Play the synth kit live from a MIDI controller or Push 2 — instant sound.
 
@@ -308,6 +310,7 @@ def jam(
     to play a melodic voice across a keyboard:
 
         audx jam                      # drum pads → kick/snare/hat/...
+        audx jam --genre techno       # same pads + looping techno patterns
         audx jam --chromatic          # keyboard plays the 'keys' voice
         audx jam --chromatic --voice bass
     """
@@ -315,10 +318,29 @@ def jam(
     from audx.midi import list_inputs
     from audx.push2 import open_push2_lights, push2_input_name, push2_pad_layout
 
+    if genre:
+        from audx.generator import Genre, generate_track
+
+        try:
+            chosen_genre = Genre(genre.strip().lower())
+        except ValueError as exc:
+            options = ", ".join(g.value for g in Genre)
+            typer.echo(f"Unknown genre '{genre}'. Choose: {options}", err=True)
+            raise typer.Exit(1) from exc
+        bpm, patterns = generate_track(chosen_genre)
+        pe = get_pattern_engine()
+        pe.set_bpm(bpm)
+        typer.echo(f"  genre: {chosen_genre.value} @ {bpm:g} BPM")
+        for pattern in patterns:
+            pe.add_pattern(pattern)
+            typer.echo(f"    ♪ {pattern.name:<10} {pattern.dsl}")
+        pe.start()
+
     inputs = list_inputs()
     in_port = port or push2_input_name() or (inputs[0] if inputs else "virtual")
     typer.echo(f"  MIDI in: {in_port}")
 
+    engine = None
     try:
         engine = init_engine()
         engine.set_bpm(bpm)
@@ -353,9 +375,15 @@ def jam(
     if once:
         if lights is not None:
             lights.close()
-        engine.stop()
+        if engine is not None:
+            engine.stop()
+        get_pattern_engine().stop()
         typer.echo("\n  jam loop complete.")
         return
+
+    if engine is None:
+        typer.echo("  · no audio engine available — install PortAudio for live sound", err=True)
+        raise typer.Exit(1)
 
     try:
         run_jam(
@@ -373,6 +401,7 @@ def jam(
         if lights is not None:
             lights.close()
         engine.stop()
+        get_pattern_engine().stop()
         typer.echo("\n  stopped.")
 
 

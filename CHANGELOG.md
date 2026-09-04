@@ -123,6 +123,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sadact-finisher bridge, minimal local `audxd` daemon, latency calibration.
 - `audx doctor` diagnostics and CI across Python 3.10–3.12.
 
-[Unreleased]: https://github.com/totalaudiopromo/audx/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/totalaudiopromo/audx/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/totalaudiopromo/audx/releases/tag/v0.2.0
+[Unreleased]: https://github.com/chrisschouk/audx/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/chrisschouk/audx/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/chrisschouk/audx/releases/tag/v0.2.0

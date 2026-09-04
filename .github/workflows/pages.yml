@@ -2,7 +2,7 @@ name: Deploy landing page
 
 # Publishes the static site/ to GitHub Pages on every push to main that touches it.
 # One-time setup: repo Settings → Pages → Source = "GitHub Actions".
-# URL: https://totalaudiopromo.github.io/audx/
+# URL: https://chrisschouk.github.io/audx/ (enable Pages → Source = GitHub Actions)
 
 on:
   push:
