@@ -2,9 +2,9 @@
 
 # audx
 
-Write a beat as text. Play it. Export when you’re done.
+A terminal-native digital audio workstation for pattern sequencing, live-coded sample playback, and Ableton session export. Calm, local, hackable. No cloud dependency.
 
-**v0.3 experimental** — core music tools work; some advanced CLI surfaces are still experimental.
+**v0.3 experimental.** Core music tools work. Some advanced CLI surfaces are still experimental.
 
 [Try the browser studio](https://audx-five.vercel.app) · [Type a pattern](https://audx-five.vercel.app/play.html) · [GitHub](https://github.com/chrisschouk/audx)
 
@@ -14,9 +14,9 @@ Write a beat as text. Play it. Export when you’re done.
 
 ## Browser (no install)
 
-**[Studio](https://audx-five.vercel.app/studio.html)** — step sequencer, synth kit, WAV / stems / share link. MIDI works best in Chrome.
+**[Studio](https://audx-five.vercel.app/studio.html):** step sequencer, synth kit, WAV / stems / share link. MIDI works best in Chrome.
 
-**[Play](https://audx-five.vercel.app/play.html)** — type `kick 4/4` and hit play.
+**[Play](https://audx-five.vercel.app/play.html):** type `kick 4/4` and hit play.
 
 ---
 
@@ -84,7 +84,7 @@ audx watch project.audx                 # Hot-reload .audx on save
 audx version
 ```
 
-Experimental / optional bridges (need extra local services or are incomplete): `audx finish`, plugin scan, voice, AI extras. See source for details — not part of the happy path yet.
+Experimental / optional bridges (need extra local services or are incomplete): `audx finish`, plugin scan, voice, AI extras. See source for details. Not part of the happy path yet.
 
 ---
 

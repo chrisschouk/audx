@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>audx — type a pattern</title>
-  <meta name="description" content="Type a rhythm, hit play. Same synth and pattern language as the audx CLI — running in your browser." />
+  <title>audx: type a pattern</title>
+  <meta name="description" content="Type a rhythm, hit play. Same synth and pattern language as the audx CLI, running in your browser." />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -166,7 +166,7 @@
   <main class="play">
     <a class="back" href="index.html">← audx</a>
     <h1>play</h1>
-    <p class="sub">Type a line. Hit play. Same synth as the terminal — right here in the browser.</p>
+    <p class="sub">Type a line. Hit play. Same synth as the terminal, right here in the browser.</p>
 
     <div class="editor">
       <textarea id="code" spellcheck="false">kick 4/4
@@ -228,7 +228,7 @@ def _render(lines, bpm, bars, sr):
     return (mix.shape[0], mix[:, 0].tobytes(), mix[:, 1].tobytes())
 _render`);
         $("play").disabled = false;
-        setStatus("ready — hit <span class='accent'>play</span>.");
+        setStatus("ready. Hit <span class='accent'>play</span>.");
       } catch (e) {
         setStatus("couldn't load: " + e);
       }
@@ -263,7 +263,7 @@ _render`);
       current.loop = true;
       current.connect(ctx.destination);
       current.start();
-      setStatus("playing. <span class='accent'>edit and hit play again.</span>");
+      setStatus("playing. Edit and hit play again.");
     }
 
     function stop() {
