@@ -36,7 +36,7 @@ TOP = 70  # below the title bar
 # Each "line" is a list of (text, color, bold) segments. None = blank line.
 Seg = tuple[str, tuple[int, int, int], bool]
 SCRIPT: list[list[Seg] | None] = [
-    [("$ ", PINK, True), ("pip install audx", TEXT, True)],
+    [("$ ", PINK, True), ('pip install "git+https://github.com/chrisschouk/audx.git"', TEXT, True)],
     [("Successfully installed audx-0.3.0", MUTED, False)],
     None,
     [("$ ", PINK, True), ("audx demo loop.wav", TEXT, True)],

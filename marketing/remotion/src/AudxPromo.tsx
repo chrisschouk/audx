@@ -335,7 +335,7 @@ const CTA: React.FC = () => {
             letterSpacing: 1,
           }}
         >
-          github.com/totalaudiopromo/audx
+          github.com/chrisschouk/audx
         </div>
       </div>
     </AbsoluteFill>

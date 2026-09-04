@@ -73,12 +73,12 @@ DEFAULT_PPQN: Final = 960  # pulses per quarter note (MIDI resolution)
 
 # UI
 THEME = {
-    "primary": "#d4a574",    # warm amber (sink-inspired)
-    "secondary": "#a8c087",  # sage green
-    "accent": "#e8a6c2",     # muted pink
-    "background": "#111111",
-    "surface": "#1e1e1e",
-    "text": "#e0e0e0",
-    "text-muted": "#888888",
-    "border": "#333333",
+    "primary": "#d79a4e",    # single amber accent (Swiss / TE restraint)
+    "secondary": "#9a9a95",  # dim ink
+    "accent": "#d79a4e",     # same accent — no multi-hue palette
+    "background": "#0a0a0a",
+    "surface": "#101010",
+    "text": "#ececea",
+    "text-muted": "#9a9a95",
+    "border": "#23231f",
 }

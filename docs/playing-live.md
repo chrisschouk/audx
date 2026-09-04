@@ -1,14 +1,14 @@
 # Playing audx live with a MIDI controller, Push 2, or Terminal
 
-## ⚡ The 10-Second Jam
+## The 10-Second Jam
 
-Get sound coming out of your speakers or pads in under 10 seconds:
+Get sound coming out of your speakers or pads quickly:
 
 ```bash
-# 1. Install audx in a clean virtual environment
+# 1. Install from GitHub in a clean virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install audx
+python -m pip install "git+https://github.com/chrisschouk/audx.git"
 
 # Native audio drivers
 brew install portaudio               # macOS
@@ -20,13 +20,19 @@ audx midi list
 
 # 3. Jam!
 audx jam                             # Instant drum pad session
-audx jam --genre techno             # Auto-generated 128 BPM techno jam
+audx jam --genre techno             # Pads + looping techno patterns @ 128 BPM
 audx jam --chromatic                # Pitched synth keyboard mode
+```
+
+No MIDI controller? Start with the offline demo or the [browser studio](https://audx-five.vercel.app/studio.html):
+
+```bash
+audx demo loop.wav
 ```
 
 ---
 
-## 🚀 Instant HD Sample Auto-Scanning & Track Generation
+## Instant HD Sample Auto-Scanning & Track Generation
 
 `audx` can automatically index usable sample libraries across your computer so you don't need to specify manual paths:
 
@@ -34,7 +40,7 @@ audx jam --chromatic                # Pitched synth keyboard mode
 # Scan ~/Music, ~/Downloads, ~/Samples, ~/Documents for audio files
 audx samples scan
 
-# Jam on the spot using scanned local samples
+# Jam on the spot using scanned local samples + genre pattern pack
 audx jam --genre house
 audx jam --genre hiphop
 audx jam --genre ukg
@@ -46,7 +52,7 @@ If no sample files are found on your hard drive, `audx` automatically uses built
 
 ---
 
-## 🎛 Push 2 Hardware Integration (Direct USB & Display)
+## Push 2 Hardware Integration (Direct USB & Display)
 
 `audx` features direct USB driver integration for Ableton Push 2 on macOS and Linux:
 
@@ -74,7 +80,7 @@ audx push2 map
 
 ---
 
-## 🎹 Live MIDI Recording & Clock Output
+## Live MIDI Recording & Clock Output
 
 Lock external hardware or Ableton Live to `audx` tempo:
 
@@ -91,7 +97,7 @@ audx midi rec my_pattern --bars 1 --ch 0
 
 ---
 
-## 🎚 Ableton Live Session Export
+## Ableton Live Session Export
 
 Export your terminal creations directly to an Ableton Live Set (`.als`):
 
@@ -103,32 +109,31 @@ Double-click `my-session.als` to open your clips, tracks, and tempo inside Ablet
 
 ---
 
-## 🌐 Local Web Companion
+## Local Web Companion
 
-Launch the playable browser instrument alongside the terminal DAW:
+For a **playable** browser instrument, use the hosted studio (or open `site/studio.html` locally) — that is the Web Audio drum machine.
+
+The CLI dashboard is a **read-only** live monitor for an already-running session:
 
 ```bash
-audx open --web
+audx open my-track --serve
 # or: audx serve --port 8080
 ```
 
-Opens `http://127.0.0.1:8080/app` with interactive Web Audio pattern playback.
+Opens `http://127.0.0.1:8080/` with session state (not a full playable `/app` UI).
+
+Browser studio tip: Web MIDI / Push 2 works best in Chromium-based browsers.
 
 ---
 
-## 🛠 Troubleshooting Modern Python Environments
+## Troubleshooting Modern Python Environments
 
 ### 1. `zsh: command not found: pip`
 Many macOS installs do not place `pip` directly on `PATH`. Use `python3 -m pip`:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install audx
-```
-Or install via `pipx` / `uv`:
-```bash
-pipx install audx
-# or: uv tool install audx
+python -m pip install "git+https://github.com/chrisschouk/audx.git"
 ```
 
 ### 2. PEP 668 `externally-managed-environment`
@@ -136,11 +141,11 @@ Homebrew Python and macOS block global `pip install` to protect system packages.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install audx
+python -m pip install "git+https://github.com/chrisschouk/audx.git"
 ```
 
 ### 3. `ModuleNotFoundError: No module named 'click'`
-`audx` explicitly declares `click>=8.0.0` in its package manifest. Re-install in a fresh venv:
+Re-install in a fresh venv from GitHub:
 ```bash
-python -m pip install --force-reinstall audx
+python -m pip install --force-reinstall "git+https://github.com/chrisschouk/audx.git"
 ```

@@ -262,7 +262,7 @@ function renderGrid(): void {
       </div>
       <input class="pan" type="range" min="-1" max="1" step="0.1" value="${track.pan}" title="pan (L–R)" />
       <div class="sample-line">
-        <label class="sample-btn" title="load your own sample (or drop a file on this row)">📁<input class="sample-input" type="file" accept="audio/*" hidden /></label>
+        <label class="sample-btn" title="load your own sample (or drop a file on this row)">sample<input class="sample-input" type="file" accept="audio/*" hidden /></label>
         <span class="sample-name ${track.sampleRef ? "has" : ""}">${track.sampleRef ? escapeHtml(track.sampleName ?? "sample") : "synth"}</span>
         ${track.sampleRef ? '<button class="mini clearsample" title="back to synth">×</button>' : ""}
       </div>`;
@@ -374,7 +374,7 @@ grid.addEventListener("click", (e) => {
 
 // ── transport + toolbar ───────────────────────────────────────────────────────
 function paintTransport(): void {
-  $("#play").textContent = state.playing ? "■ stop" : "▶ play";
+  $("#play").textContent = state.playing ? "Stop" : "Play";
   $("#play").classList.toggle("playing", state.playing);
 }
 
@@ -455,9 +455,9 @@ function wireToolbar(): void {
   $("#share").addEventListener("click", async () => {
     const url = `${location.origin}${location.pathname}#p=${encodeProject(snapshot())}`;
     history.replaceState(null, "", url);
-    try { await navigator.clipboard.writeText(url); $("#share").textContent = "link copied ✓"; }
+    try { await navigator.clipboard.writeText(url); $("#share").textContent = "copied"; }
     catch { $("#share").textContent = "link in address bar"; }
-    setTimeout(() => ($("#share").textContent = "share link"), 1600);
+    setTimeout(() => ($("#share").textContent = "Share link"), 1600);
   });
 
   $("#wav").addEventListener("click", () => {
@@ -477,9 +477,9 @@ function wireToolbar(): void {
     const out = $("#dsl-out");
     out.textContent = dsl;
     out.classList.add("show");
-    try { await navigator.clipboard.writeText(dsl); $("#export").textContent = "copied ✓"; }
-    catch { $("#export").textContent = "copy as audx DSL"; }
-    setTimeout(() => ($("#export").textContent = "copy as audx DSL"), 1600);
+    try { await navigator.clipboard.writeText(dsl); $("#export").textContent = "copied"; }
+    catch { $("#export").textContent = "Copy DSL"; }
+    setTimeout(() => ($("#export").textContent = "Copy DSL"), 1600);
   });
 
   const midiBtn = $("#midi");
@@ -530,7 +530,7 @@ function highlightActiveScene(scene: Scene, globalStep: number): void {
   }
   const seqChips = document.querySelectorAll("#seq-chips .seq-chip");
   seqChips.forEach((el, i) => el.classList.toggle("active", i === seqIdx));
-  $("#song-status").textContent = `▶ ${scene.name} · bar ${bar + 1}/${totalB}`;
+  $("#song-status").textContent = `${scene.name} · bar ${bar + 1}/${totalB}`;
 }
 
 function persistSong(): void {
@@ -566,7 +566,7 @@ function renderSongChips(): void {
   song.sequence.forEach((name, i) => {
     const chip = document.createElement("button");
     chip.className = "seq-chip";
-    chip.textContent = `${i + 1}. ${name} ✕`;
+    chip.textContent = `${i + 1}. ${name}`;
     chip.title = "remove from sequence";
     chip.onclick = () => { song.sequence.splice(i, 1); renderSongChips(); persistSong(); };
     seq.appendChild(chip);

@@ -1,0 +1,27 @@
+/* audx design tokens: Swiss / TE restraint.
+   Near-monochrome + one amber accent. No gradients, no multi-accent rainbow. */
+:root {
+  --bg: #0a0a0a;
+  --surface: #101010;
+  --surface-2: #0d0d0d;
+  --ink: #ececea;
+  --ink-dim: #9a9a95;
+  --grey: #56554f;
+  --line: #23231f;
+  --accent: #d79a4e;
+  --accent-ink: #0a0a0a;
+
+  /* Compat aliases used by older page rules */
+  --primary: var(--accent);
+  --secondary: var(--ink-dim);
+  --text: var(--ink);
+  --muted: var(--ink-dim);
+  --border: var(--line);
+
+  --sans: "IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --radius: 3px;
+  --radius-panel: 4px;
+}

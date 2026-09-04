@@ -3,113 +3,61 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>audx — code your music, own your sound</title>
-  <meta name="description" content="A terminal-native digital audio workstation. Pattern sequencing, a built-in synth kit, stem mixing and live-coded playback — all from your keyboard." />
+  <title>audx: write a beat, hear it, export it</title>
+  <meta name="description" content="A terminal-native digital audio workstation. Pattern sequencing, a built-in synth kit, and live-coded playback. Calm, local, hackable. No cloud." />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <nav class="landing-nav" aria-label="External">
+    <a href="https://github.com/chrisschouk/audx">GitHub</a>
+  </nav>
+
   <header class="hero">
-    <nav class="nav">
-      <span class="brand">audx</span>
-      <a class="nav-link" href="https://github.com/totalaudiopromo/audx">GitHub ↗</a>
-    </nav>
+    <h1 class="wordmark">audx</h1>
+    <p class="hero-line">
+      Terminal-native DAW. Pattern sequencing, a built-in synth kit, live-coded playback. Local, hackable, no cloud.
+    </p>
+    <div class="cta-row">
+      <a class="btn-primary" href="studio.html">Open studio</a>
+      <a class="btn-ghost" href="play.html">Try a pattern</a>
+    </div>
 
-    <div class="hero-inner">
-      <h1>Code your music.<br /><span class="accent">Own your sound.</span></h1>
-      <p class="tagline">
-        A terminal-native digital audio workstation. Pattern sequencing, a
-        built-in synth kit, stem mixing and live-coded playback — calm, local,
-        hackable. No cloud. No mouse. No lock-in.
-      </p>
-
-      <div class="terminal" aria-label="quick start">
-        <div class="terminal-bar">
-          <span class="dot red"></span><span class="dot amber"></span><span class="dot green"></span>
-          <span class="terminal-title">make a beat in 10 seconds</span>
-        </div>
-        <pre class="terminal-body"><code><span class="prompt">$</span> <span class="cmd">pip install audx</span>
-<span class="prompt">$</span> <span class="cmd">audx demo loop.wav</span>
-  audx · demo
-    <span class="note">♪ kick     kick 4/4</span>
-    <span class="note">♪ sub      sub e(3,8) | tune -5st</span>
-    <span class="note">♪ clap     clap 2/8</span>
-    <span class="note">♪ hats     hh 16x8 | swing 12%</span>
-  <span class="ok">✓ rendered 4 bars @ 124 BPM → loop.wav</span></code></pre>
-      </div>
-      <p class="subtle">No samples. No audio hardware. No config. Just sound.</p>
-      <p style="margin-top:1.6rem; display:flex; gap:0.7rem; flex-wrap:wrap">
-        <a class="button" href="studio.html">▶ open the studio</a>
-        <a class="button" href="play.html">type a pattern</a>
-      </p>
+    <div class="hero-stage" aria-label="audx studio preview">
+      <iframe
+        src="studio.html?embed=1"
+        title="audx studio"
+        loading="lazy"
+        tabindex="-1"
+      ></iframe>
+      <a class="hero-stage-link" href="studio.html" aria-label="Open full studio"></a>
+      <span class="hero-stage-label">studio</span>
     </div>
   </header>
 
-  <main>
-    <section class="features">
-      <h2>Built to feel like an instrument</h2>
-      <div class="grid">
-        <article class="card">
-          <h3>Pattern DSL</h3>
-          <p>Write rhythm as text: <code>kick 4/4</code>, <code>hh 16x8</code>,
-             Euclidean <code>e(5,16,2)</code>, explicit <code>[1.0.1.1]</code> grids.</p>
-        </article>
-        <article class="card">
-          <h3>Built-in synth kit</h3>
-          <p>14 procedurally-synthesised drum &amp; perc voices. Zero samples
-             required — drop in your own audio whenever you like.</p>
-        </article>
-        <article class="card">
-          <h3>16-channel mixer</h3>
-          <p>Gain, mute, pan and live level meters. Mix stems the way you'd
-             expect, driven entirely from the keyboard.</p>
-        </article>
-        <article class="card">
-          <h3>Offline rendering</h3>
-          <p>Patterns and stems straight to WAV. No audio device needed — pure
-             Python and numpy under the hood.</p>
-        </article>
-        <article class="card">
-          <h3>MIDI in &amp; out</h3>
-          <p>Export to Standard MIDI File, send clock to external gear, record
-             incoming MIDI into patterns.</p>
-        </article>
-        <article class="card">
-          <h3>Live-coding workflow</h3>
-          <p><code>.audx</code> projects, A/B/C/D slots, cheap forks, hot-reload
-             and human-readable diffs.</p>
-        </article>
-      </div>
+  <main class="landing-main">
+    <section class="landing-section">
+      <h2>Language</h2>
+      <pre class="pattern-block"><code><span class="cm"># kick every beat, hats with swing, a low sub</span>
+kick 4/4
+clap 2/8
+hh 16x8 | swing 12%
+sub e(3,8) | tune -5st</code></pre>
     </section>
 
-    <section class="showcase">
-      <h2>Speak in patterns</h2>
-      <div class="showcase-grid">
-        <pre><code><span class="prompt">$</span> <span class="cmd">audx render "cowbell e(5,16,2)"</span>
-<span class="prompt">$</span> <span class="cmd">audx render "hh 16x8 | swing 12%"</span>
-<span class="prompt">$</span> <span class="cmd">audx render "sub e(3,8) | tune -5st"</span>
-<span class="prompt">$</span> <span class="cmd">audx synths</span>
-<span class="prompt">$</span> <span class="cmd">audx init my-track --template techno</span></code></pre>
-        <ul class="ops">
-          <li><code>vel</code> — level 0.0–1.0</li>
-          <li><code>swing</code> — delay odd 16ths</li>
-          <li><code>humanize</code> — velocity jitter</li>
-          <li><code>chance</code> — per-step probability</li>
-          <li><code>tune</code> — ±semitones</li>
-          <li><code>pan</code> · <code>gain</code> · <code>channel</code></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="cta">
-      <h2>Open a terminal. Hit play.</h2>
-      <pre class="cta-cmd"><code><span class="prompt">$</span> <span class="cmd">pip install audx &amp;&amp; audx demo loop.wav</span></code></pre>
-      <a class="button" href="https://github.com/totalaudiopromo/audx">Read the docs on GitHub ↗</a>
+    <section class="landing-section">
+      <h2>Terminal</h2>
+      <pre class="install-block"><code><span class="prompt">$</span> pip install "git+https://github.com/chrisschouk/audx.git"
+<span class="prompt">$</span> audx demo loop.wav</code></pre>
     </section>
   </main>
 
-  <footer>
+  <footer class="landing-footer">
     <p class="philosophy">Code is the controller. Sound is the canvas. Terminal is the dimension.</p>
-    <p class="copyright">MIT © Chris Schofield · <a href="https://github.com/totalaudiopromo/audx">totalaudiopromo/audx</a></p>
+    <p class="meta">MIT · <a href="https://github.com/chrisschouk/audx">chrisschouk/audx</a> · v0.3</p>
   </footer>
 </body>
 </html>

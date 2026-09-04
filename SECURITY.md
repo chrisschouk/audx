@@ -16,12 +16,15 @@ Include:
 - reproduction steps
 - whether local files, network access, or credentials are involved
 
-## Local File Access
+## Local Network Surfaces
 
-The browser UI served by `audx serve` can read local audio/project files through
-localhost endpoints. Only run it on trusted machines and keep the default
+`audx serve` (and `audx open --serve`) hosts a **read-only** live monitor on
+localhost by default. It exposes session state for convenience — keep the default
 localhost binding unless you intentionally want another device on your network
 to connect.
+
+The static browser studio (`site/studio.html`) runs entirely in the browser and
+does not read your local filesystem via the CLI server.
 
 ## AI and Network Features
 

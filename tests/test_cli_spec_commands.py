@@ -90,6 +90,16 @@ def test_jam_command_with_genre_flag():
     result = runner.invoke(app, ["jam", "--genre", "house", "--once"])
     assert result.exit_code == 0
     assert "house" in result.output.lower()
+    assert "124" in result.output  # house genre tempo
+    assert "♪" in result.output
+    # Output lists generated tracks during the session
+    assert "kick" in result.output.lower() or "clap" in result.output.lower()
+
+
+def test_jam_command_rejects_unknown_genre():
+    result = runner.invoke(app, ["jam", "--genre", "not-a-genre", "--once"])
+    assert result.exit_code != 0
+    assert "unknown genre" in result.output.lower()
 
 
 def test_samples_scan_command():
