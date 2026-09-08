@@ -116,6 +116,7 @@ def install_tools(root, python_projects=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--require-environment', action='store_true', help='fail if a declared task-specific environment variable is missing')
     parser.add_argument('--sync-context', action='store_true', help='sync shared commands and direct skill dependencies from TAP')
     parser.add_argument('--install-tools', action='store_true', help='install missing pinned Linux cloud CLIs')
     parser.add_argument('--install', action='store_true', help='install locked dependencies; lifecycle scripts disabled')
@@ -201,7 +202,8 @@ def main():
         report('shared command context', 'verified' if synced else 'unavailable', 'files present; task-specific command runtime untested')
         failed = failed or not synced
     for name in config['environment']:
-        failed = failed or not bool(os.environ.get(name))
+        if args.require_environment and not os.environ.get(name):
+            failed = True
         report(name, 'untested' if os.environ.get(name) else 'unavailable', 'configured; no provider request made' if os.environ.get(name) else 'not configured')
     report('application, providers, cloud activation', 'untested', 'setup does not build, test, deploy, send, spend, ingest or load private financial data')
     return 2 if failed else 0
