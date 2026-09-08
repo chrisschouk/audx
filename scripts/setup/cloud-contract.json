@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "projects": [
+    {
+      "path": ".",
+      "manager": "uv"
+    },
+    {
+      "path": "web",
+      "manager": "npm"
+    }
+  ],
+  "environment": []
+}
