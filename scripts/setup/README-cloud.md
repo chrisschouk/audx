@@ -22,8 +22,11 @@ build passed. Cockpit has no package root: use the target repository's setup for
 
 `verified` means the named command actually succeeded; `unavailable` means missing or failed;
 `untested` means no relevant operation was attempted. Exit 2 reports a required tool,
-package-manager, dependency or declared environment-variable failure. A missing declared CLI makes the result degraded (exit 2); independent checks still run. Exit 0 is not a claim of cloud or production readiness.
-Credentials are checked for presence only. Provider authentication and permissions require a
+package-manager or dependency failure. A missing declared CLI makes the result degraded (exit 2); independent checks still run. Exit 0 is not a claim of cloud or production readiness.
+Provider credentials are optional during setup. Missing values are reported as
+`unavailable` without blocking agent startup. Use `--require-environment` only when
+the requested task requires every environment variable declared in this contract;
+then missing values also cause exit 2. Credentials are checked for presence only. Provider authentication and permissions require a
 separate read-only probe. No secret values or subprocess output are printed.
 
 This setup never reads a secrets file, copies private data, changes provider settings,
