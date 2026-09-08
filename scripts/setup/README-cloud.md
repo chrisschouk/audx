@@ -99,7 +99,7 @@ The helper accepts a localhost starting URL only. The page may still load remote
 assets or redirect; review the final URL and screenshot. Use the available browser
 connector or an explicit Playwright script for public-site checks.
 
-On 08 September 2026, cloud session `session_01Bf3uh7g1Bnjpp2B1HgZ4Nz` successfully
+A verified cloud session on 08 September 2026 successfully
 clicked a localhost HTML button, observed its DOM change and captured before/after
 screenshots with preinstalled Chromium. Public Chromium browsing in that same session
 failed at the browser relay with `ws_closed_mid_exchange`, although curl returned 200.
