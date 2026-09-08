@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""Resolve the current repository's declared pnpm from a fresh shell."""
+import json
+import os
+from pathlib import Path
+import sys
+
+cwd = Path.cwd().resolve()
+for root in [cwd, *cwd.parents]:
+    contract = root / 'scripts/setup/cloud-contract.json'
+    if not contract.is_file():
+        continue
+    projects = json.loads(contract.read_text())['projects']
+    matching = [p for p in projects if p['manager'].startswith('pnpm@') and (cwd == root / p['path'] or root / p['path'] in cwd.parents)]
+    if not matching:
+        break
+    project = max(matching, key=lambda p: len(p['path']))
+    tools = Path(os.environ.get('CLOUD_SETUP_TOOLS_DIR', str(Path.home() / '.local/share/cloud-setup')))
+    binary = tools / project['manager'] / 'node_modules/.bin/pnpm'
+    if not binary.is_file():
+        print('pnpm: unavailable (run this repository cloud setup with --install)', file=sys.stderr)
+        sys.exit(2)
+    os.execv(str(binary), [str(binary), *sys.argv[1:]])
+print('pnpm: unavailable (no matching repository cloud contract)', file=sys.stderr)
+sys.exit(2)

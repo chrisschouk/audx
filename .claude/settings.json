@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/cloud-session-path.sh\"",
+            "timeout": 10,
+            "statusMessage": "Configuring cloud command path"
+          }
+        ]
+      }
+    ]
+  }
+}
