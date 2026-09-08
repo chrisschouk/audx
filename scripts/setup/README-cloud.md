@@ -69,3 +69,42 @@ The cloud-only .claude/hooks/cloud-session-path.sh SessionStart hook persists th
 PATH through CLAUDE_ENV_FILE for subsequent session commands. It identifies its own
 repository, shell-quotes the PATH assignment, and does nothing on the Mac. It changes
 no permissions and writes no credentials. A missing cloud env-file reports unavailable.
+
+## Browser capability in a cloud session
+
+Check the actual session before claiming that a browser is unavailable:
+
+```sh
+node scripts/setup/cloud-browser.mjs doctor
+node scripts/setup/cloud-browser.mjs render http://localhost:3000/ /tmp/app-page.png
+```
+
+Use the running app's actual port in that command.
+
+The helper discovers Playwright in the declared package roots or pnpm store, then
+uses its installed browser or a preinstalled browser cache, including the cloud
+image's `/opt/pw-browsers`. No package or browser download runs. `doctor` reports
+paths only: launching remains untested. `render` launches, checks the HTTP response
+and saves a screenshot. Open that screenshot to inspect the visible page. A rendered
+page does not prove a control works; follow the target repository's verification
+workflow and drive the actual control with an assertion on the resulting behaviour.
+Use hermetic test data for E2E. A tiny localhost HTML fixture proves browser capability,
+not TAP behaviour. This helper does not start an app or provision its data.
+
+`CLOUD_BROWSER=firefox` or `CLOUD_BROWSER=webkit` selects another installed engine;
+`CLOUD_BROWSER_EXECUTABLE` supplies a known executable when discovery needs help.
+An alternate cached executable can differ from the Playwright package's expected
+version, so a launch error remains `unavailable` (exit 2), never a successful check.
+The helper accepts a localhost starting URL only. The page may still load remote
+assets or redirect; review the final URL and screenshot. Use the available browser
+connector or an explicit Playwright script for public-site checks.
+
+On 08 September 2026, cloud session `session_01Bf3uh7g1Bnjpp2B1HgZ4Nz` successfully
+clicked a localhost HTML button, observed its DOM change and captured before/after
+screenshots with preinstalled Chromium. Public Chromium browsing in that same session
+failed at the browser relay with `ws_closed_mid_exchange`, although curl returned 200.
+That is a transport failure, not evidence of an approval denial, and curl does not
+prove browser navigation. Recheck the current session's browser and proxy helper
+instructions before diagnosing it. Do not disable certificate verification or alter
+permissions in response to that error. Report the precise failed route and any
+separately verified route; a prior session's success is not current capability proof.
