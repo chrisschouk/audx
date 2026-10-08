@@ -73,6 +73,20 @@ def test_pattern_dsl_explicit_grid():
     pattern = Pattern(name="clap", dsl="clap [1.0.1.0.1.1.0.0]")
     pattern.parse_dsl()
     assert len(pattern.steps) == 4
+    # dots separate the eight cells, so hits land on 8th notes 0, 2, 4 and 5
+    assert [step.beat for step in pattern.steps] == [0.0, 1.0, 2.0, 2.5]
+
+
+def test_pattern_dsl_explicit_grid_without_separators_reads_per_character():
+    pattern = Pattern(name="clap", dsl="clap [1000100010001000]")
+    pattern.parse_dsl()
+    assert [step.beat for step in pattern.steps] == [0.0, 1.0, 2.0, 3.0]
+
+
+def test_pattern_dsl_explicit_grid_dot_as_rest_still_works():
+    pattern = Pattern(name="clap", dsl="clap [1..1]")
+    pattern.parse_dsl()
+    assert [step.beat for step in pattern.steps] == [0.0, 3.0]
 
 
 def test_pattern_dsl_two_eighth_lands_on_beats_2_and_4():
