@@ -116,7 +116,7 @@ const Hero: React.FC = () => {
         >
           a drum machine
           <br />
-          you play by typing.
+          in your browser.
         </div>
         <div
           style={{
@@ -129,7 +129,7 @@ const Hero: React.FC = () => {
             letterSpacing: 0.5,
           }}
         >
-          it runs in your browser, with nothing to install
+          nothing to install, and it's open source
         </div>
       </div>
     </AbsoluteFill>
@@ -312,7 +312,7 @@ const CTA: React.FC = () => {
     >
       <div style={{ textAlign: "center", transform: `translateY(${y}px)` }}>
         <div style={{ color: COLORS.ink, fontSize: 60, fontWeight: 600 }}>
-          try it in your browser
+          open the studio
         </div>
         <div
           style={{
@@ -324,7 +324,7 @@ const CTA: React.FC = () => {
             color: COLORS.ink,
           }}
         >
-          audx-five.vercel.app/play
+          audx-five.vercel.app/studio
           <span style={{ opacity: caret, color: COLORS.accent }}> ▌</span>
         </div>
         <div
