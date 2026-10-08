@@ -587,7 +587,7 @@
       },
       {
         "sample": "clap",
-        "beat": 1.0666666666666667,
+        "beat": 1.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -596,7 +596,7 @@
       },
       {
         "sample": "clap",
-        "beat": 2.1333333333333333,
+        "beat": 2.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -605,7 +605,7 @@
       },
       {
         "sample": "clap",
-        "beat": 2.6666666666666665,
+        "beat": 2.5,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,
@@ -635,7 +635,7 @@
       },
       {
         "sample": "t",
-        "beat": 2.2857142857142856,
+        "beat": 2.0,
         "velocity": 0.8,
         "channel": 0,
         "gain_db": 0.0,

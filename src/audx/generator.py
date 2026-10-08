@@ -51,21 +51,21 @@ def generate_track(genre: Genre = Genre.TECHNO, library: SampleLibrary | None = 
         patterns = [
             Pattern(name="kick", dsl=f"{kick_name} 4/4 | channel 0", channel=0),
             Pattern(name="clap", dsl=f"{snare_name} 2/8 | channel 1 | vel 0.9", channel=1),
-            Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 54% | vel 0.7", channel=2),
+            Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 8% | vel 0.7", channel=2),
             Pattern(name="bass", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     elif genre == Genre.HIPHOP:
         patterns = [
             Pattern(name="kick", dsl=f"{kick_name} 2/4 | channel 0", channel=0),
             Pattern(name="snare", dsl=f"{snare_name} 2/8 | channel 1 | humanize 12%", channel=1),
-            Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 48% | chance 90%", channel=2),
+            Pattern(name="hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 12% | chance 90%", channel=2),
             Pattern(name="bass", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     elif genre == Genre.UKG:
         patterns = [
             Pattern(name="kick", dsl=f"{kick_name} 4/4 | channel 0", channel=0),
             Pattern(name="snare", dsl=f"{snare_name} 2/8 | channel 1 | vel 0.95", channel=1),
-            Pattern(name="skip_hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 60%", channel=2),
+            Pattern(name="skip_hats", dsl=f"{hat_name} 16x8 | channel 2 | swing 20%", channel=2),
             Pattern(name="sub", dsl=f"{bass_name} 4/4 | channel 3", channel=3),
         ]
     else:  # AMBIENT

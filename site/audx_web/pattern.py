@@ -214,7 +214,9 @@ class Pattern:
     ) -> None:
         cells = [c for c in re.split(r"[\s,]+", inner) if c]
         if len(cells) == 1 and len(cells[0]) > 1:
-            cells = list(cells[0])
+            token = cells[0]
+            # ``1.0.1.0`` uses dots as separators; ``1..1`` or ``1010`` reads per character.
+            cells = token.split(".") if _DOT_SEPARATED.fullmatch(token) else list(token)
         if not cells:
             self.steps = []
             return
@@ -288,6 +290,7 @@ class Pattern:
         return beat % self.length_beats
 
 
+_DOT_SEPARATED = re.compile(r"[01xX*](?:\.[01xX*])+")
 _EUCLID_RE = re.compile(r"e\(\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(-?\d+))?\s*\)", re.IGNORECASE)
 
 

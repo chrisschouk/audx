@@ -210,7 +210,10 @@ interface Ctx {
 
 function explicitGrid(inner: string, ctx: Ctx, sampleHint?: string): Step[] {
   let cells = inner.split(/[\s,]+/).filter((c) => c);
-  if (cells.length === 1 && cells[0].length > 1) cells = cells[0].split("");
+  // "1.0.1.0" uses dots as separators; "1..1" or "1010" reads per character.
+  if (cells.length === 1 && cells[0].length > 1) {
+    cells = /^[01xX*](?:\.[01xX*])+$/.test(cells[0]) ? cells[0].split(".") : cells[0].split("");
+  }
   if (!cells.length) return [];
   const width = ctx.lengthBeats / cells.length;
   const sample = sampleName(sampleHint ?? ctx.name);
