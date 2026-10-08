@@ -312,7 +312,7 @@ const CTA: React.FC = () => {
     >
       <div style={{ textAlign: "center", transform: `translateY(${y}px)` }}>
         <div style={{ color: COLORS.ink, fontSize: 60, fontWeight: 600 }}>
-          open a terminal. hit play.
+          type a beat. hit play.
         </div>
         <div
           style={{
@@ -324,7 +324,7 @@ const CTA: React.FC = () => {
             color: COLORS.ink,
           }}
         >
-          <span style={{ color: COLORS.accent }}>$</span> pip install audx
+          audx-five.vercel.app/play
           <span style={{ opacity: caret, color: COLORS.accent }}> ▌</span>
         </div>
         <div
