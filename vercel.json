@@ -3,5 +3,6 @@
   "outputDirectory": "site",
   "buildCommand": "echo no build",
   "installCommand": "echo no install",
-  "framework": null
+  "framework": null,
+  "cleanUrls": true
 }
