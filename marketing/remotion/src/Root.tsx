@@ -1,7 +1,7 @@
 import { Composition } from "remotion";
 import { AudxPromo } from "./AudxPromo";
 
-// 20s promo at 30fps = 600 frames, locked to the 124 BPM beat in public/.
+// 20s promo at 30fps = 600 frames, locked to the 132 BPM beat in public/.
 export const RemotionRoot: React.FC = () => {
   return (
     <Composition
