@@ -7,7 +7,7 @@
     "studio": "remotion studio",
     "render": "remotion render AudxPromo out/audx-promo.mp4",
     "render-gif": "remotion render AudxPromo out/audx-promo.gif --codec=gif",
-    "still": "remotion still AudxPromo out/poster.png --frame=120"
+    "still": "remotion still AudxPromo out/poster.png --frame=300"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.0",

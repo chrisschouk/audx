@@ -79,7 +79,7 @@ const Frame: React.FC = () => (
         letterSpacing: 2,
       }}
     >
-      terminal-native daw
+      open source · MIT
     </div>
   </AbsoluteFill>
 );
@@ -114,9 +114,9 @@ const Hero: React.FC = () => {
             letterSpacing: -1,
           }}
         >
-          code your music.
+          a drum machine
           <br />
-          own your sound.
+          you play by typing.
         </div>
         <div
           style={{
@@ -129,7 +129,7 @@ const Hero: React.FC = () => {
             letterSpacing: 0.5,
           }}
         >
-          a digital audio workstation you play from the keyboard
+          it runs in your browser, with nothing to install
         </div>
       </div>
     </AbsoluteFill>
@@ -175,8 +175,8 @@ const Sequencer: React.FC = () => {
             letterSpacing: 1,
           }}
         >
-          <span>sequencer</span>
-          <span style={{ color: COLORS.grey }}>124 bpm · synth kit · no samples</span>
+          <span>this beat</span>
+          <span style={{ color: COLORS.grey }}>132 bpm · made in audx</span>
         </div>
 
         <div style={{ position: "relative" }}>
@@ -312,7 +312,7 @@ const CTA: React.FC = () => {
     >
       <div style={{ textAlign: "center", transform: `translateY(${y}px)` }}>
         <div style={{ color: COLORS.ink, fontSize: 60, fontWeight: 600 }}>
-          type a beat. hit play.
+          try it in your browser
         </div>
         <div
           style={{
