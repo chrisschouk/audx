@@ -2,7 +2,7 @@
 
 # audx
 
-A terminal-native digital audio workstation for pattern sequencing, live-coded sample playback, and Ableton session export. Calm, local, hackable. No cloud dependency.
+A terminal-native digital audio workstation for pattern sequencing, live-coded sample playback and Ableton session export. It runs locally with no cloud account.
 
 **v0.3 experimental.** Core music tools work. Some advanced CLI surfaces are still experimental.
 
@@ -126,8 +126,6 @@ cd web && npm ci && npm test && npm run build
 
 ---
 
-## Philosophy
+## Licence
 
-> Code is the controller. Sound is the canvas. Terminal is the dimension.
-
-Local-first. Hackable. No cloud lock-in. MIT licensed.
+MIT. Everything runs on your own machine, and projects are plain `.audx` files you can diff and fork.
